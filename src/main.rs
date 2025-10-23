@@ -1,5 +1,6 @@
 
 
+use mlua::prelude::LuaError;
 mod ui;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
@@ -7,9 +8,6 @@ async fn main() -> mlua::Result<()> {
   let mut lulu =
       lulu::lulu::Lulu::new(Some(std::env::args().skip(1).collect()),
       Some(std::env::current_exe()?.parent().unwrap().to_path_buf()));
-
-  // This is a mlua Lua instance
-  lulu.lua = mlua::Lua::new();
 
   // Read font bytes
   let font_bytes = std::fs::read("assets/fonts/DejaVuSansMono.ttf")
@@ -19,8 +17,9 @@ async fn main() -> mlua::Result<()> {
 
 
   let lua_code = std::fs::read_to_string("src/lua/test.lua")?;
+  lulu.add_mod_from_code("main".to_string(), lua_code, None);
 
-  ui::run(lulu, lua_code).await.map_err(|e| mlua::Error::external(e.to_string()))?;
+  lulu::handle_error!(ui::run(&mut lulu).await.map_err(|e| mlua::Error::external(e.to_string())));
 
   Ok(())
 }
