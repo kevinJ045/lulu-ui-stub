@@ -85,16 +85,18 @@ local function render_ui(ui)
   end
 
   ui:horizontal(function(h_ui)
-    if h_ui:button("Click me! (Lua)") then
-      -- print("Button clicked in Lua!")
+    if h_ui:button("Click me! (Lua)").clicked then
+      print("Button clicked in Lua!")
     end
-    if h_ui:button("Click me 2! (Lua)") then
-      -- print("Button 2 clicked in Lua!")
+    if h_ui:button("Click me 2! (Lua)").clicked then
+      print("Button 2 clicked in Lua!")
     end
   end)
 
   ui:collapsing_header("shshs", function(c_ui)
-    c_ui:label("Some text")
+    if c_ui:label("Some text").clicked then
+      print("Label clicked in Lua!")
+    end
   end)
 
   
