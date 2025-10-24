@@ -1953,6 +1953,8 @@ dependencies = [
 [[package]]
 name = "lulu"
 version = "0.0.615"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ca8aaa8789dcb567b5c142745035583981b132737e0e0b3a71d389df1553bd3"
 dependencies = [
  "anyhow",
  "clap",
