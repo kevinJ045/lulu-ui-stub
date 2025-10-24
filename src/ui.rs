@@ -1330,7 +1330,7 @@ async fn load_main(lulu: &mut Lulu) -> Result<mlua::Value, String> {
 
   let main_name = lulu.find_mod("main").map_err(|e| e.to_string())?;
 
-  let ui_code = std::fs::read_to_string("src/lua/ui.lua").map_err(|e| e.to_string())?;
+  let ui_code = include_str!("lua/ui.lua");
   let f = lulu
     .lua
     .load(lulu.compiler.compile(&ui_code, None, None))

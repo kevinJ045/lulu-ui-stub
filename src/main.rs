@@ -17,7 +17,7 @@ async fn main() -> mlua::Result<()> {
   if let Some(mods) = lulu::bundle::load_embedded_scripts() {
     lulu::bundle::reg_bundle_nods(&mut lulu, mods)?;
   } else {
-    let path = std::path::Path::new("test/test.lua");
+    let path = std::path::Path::new("main.lua");
     if path.exists() {
       lulu.entry_mod_path(path.to_path_buf())?;
     }
