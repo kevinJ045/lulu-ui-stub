@@ -3,6 +3,14 @@ local id = 0
 local elements = Vec({})
 
 class! @into_collectible("collect") State(@default_to("") value), {
+  init(){
+    self._on_set = {}
+    self.on_set = function(val)
+      for _, f in ipairs(self._on_set) do
+        f(val)
+      end
+    end
+  }
   format(str){
     return self:map(function(e)
       return str:gsub("{}", e):gsub("{{}}", "{}")
@@ -14,12 +22,40 @@ class! @into_collectible("collect") State(@default_to("") value), {
       return not e
     end)
   }
+
+  inside(thing){
+    return self:map(function(e)
+      if instanceof(thing, State) then
+        return thing:get()[e]
+      else
+        return thing[e]
+      end
+    end)
+  }
+
+  named(thing){
+    return self:map(function(e)
+      return e[thing]
+    end)
+  }
+  
+  is(thing){
+    return self:map(function(e)
+      return e == thing
+    end)
+  }
+
+  is_not(thing){
+    return self:map(function(e)
+      return e ~= thing
+    end)
+  }
   
   map(formatter){
     local s = State(formatter(self.value))
-    self.on_set = function(val)
-      s.value = formatter(val)
-    end
+    table.insert(self._on_set, function(val)
+      s:set(formatter(val))
+    end)
     return s
   }
 
@@ -259,15 +295,23 @@ end
 
 ui = {}
 
+local function get_value(val)
+  if val ~= nil and type(val) == "table" and val.__value then
+    return val.__value
+  else
+    return val
+  end
+end
+
 local function handle_events(self, event, response)
   if response[event] then
-    self:emit(event, response.value)
+    self:emit(event, get_value(response.value))
   end
 end
 
 local function handle_change(self, name, response)
   if response.changed then
-    self.props[name] = response.value
+    self.props[name] = get_value(response.value)
   end
 
   return response
@@ -309,12 +353,40 @@ local function render_from(vec, ui)
   end)
 end
 
+ui.ColoredLabel = register_element("colored_label", { text = "", color = { 150, 150, 150, 255 } }, function(self, ui)
+  handle_reponse(self, ui:colored_label(self.props.text, self.props.color))
+end)
+
 ui.Label = register_element("label", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:label(self.props.text, self.props.style))
+  handle_reponse(self, ui:label(self.props.text))
+end)
+
+ui.Heading = register_element("heading", { text = "" }, function(self, ui)
+  handle_reponse(self, ui:heading(self.props.text))
+end)
+
+ui.Small = register_element("small", { text = "" }, function(self, ui)
+  handle_reponse(self, ui:small(self.props.text))
+end)
+
+ui.Weak = register_element("weak", { text = "" }, function(self, ui)
+  handle_reponse(self, ui:weak(self.props.text))
+end)
+
+ui.Strong = register_element("strong", { text = "" }, function(self, ui)
+  handle_reponse(self, ui:strong(self.props.text))
+end)
+
+ui.Monospace = register_element("monospace", { text = "" }, function(self, ui)
+  handle_reponse(self, ui:monospace(self.props.text))
 end)
 
 ui.Hyperlink = register_element("hyperlink", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:hyperlink(self.props.text, self.props.style))
+  handle_reponse(self, self.props.url and ui:hyperlink_to(self.props.text, self.props.url) or ui:hyperlink(self.props.text))
+end)
+
+ui.Link = register_element("link", { text = "" }, function(self, ui)
+  handle_reponse(self, ui:link(self.props.text))
 end)
 
 ui.Button = register_element("button", { text = "" }, function(self, ui)
@@ -322,64 +394,80 @@ ui.Button = register_element("button", { text = "" }, function(self, ui)
 end)
 
 ui.Checkbox = register_element("checkbox", { text = "", checked = false }, function(self, ui)
-  handle_reponse(self, handle_change(self, "checked", ui:checkbox(self.props.text, self.props.checked, self.props.style)))
+  handle_reponse(self, handle_change(self, "checked", ui:checkbox(self.props.text, self.props.checked)))
 end)
 
 ui.Dragvalue = register_element("drag_value", { text = "", min = 0.0, max = 100.0, value = 0.0 }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:drag_value(self.props.text, self.props.value, self.props.style)))
+  handle_reponse(self, handle_change(self, "value", ui:drag_value(self.props.text, self.props.value)))
 end)
 
 ui.Slider = register_element("slider", { text = "", value = 0.0 }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:drag_value(self.props.text, self.props.value, self.props.style)))
+  handle_reponse(self, handle_change(self, "value", ui:drag_value(self.props.text, self.props.value)))
 end)
 
 ui.Separator = register_element("separator", {}, function(self, ui)
-  handle_reponse(self, ui:separator(self.props.style))
+  handle_reponse(self, ui:separator())
 end)
 
 ui.Spinner = register_element("spinner", {}, function(self, ui)
-  handle_reponse(self, ui:spinner(self.props.style))
+  handle_reponse(self, ui:spinner())
+end)
+
+ui.Image = register_element("image", {}, function(self, ui)
+  handle_reponse(self, ui:image(self.props.src, self.props))
+end)
+
+ui.Combobox = register_element("combobox", { text = "Select", selected = "", values = {} }, function(self, ui)
+  handle_reponse(self, handle_change(self, "selected", ui:combobox(self.props.text, self.props.selected, self.props.values, self.props.render_item)))
+end)
+
+ui.Code = register_element("code", { text = "" }, function(self, ui)
+  handle_reponse(self, ui:code(self.props.text))
+end)
+
+ui.CodeEditor = register_element("code_editor", { text = "" }, function(self, ui)
+  handle_reponse(self, handle_change(self, "text", ui:code_editor(self.props.text)))
 end)
 
 ui.ProgressBar = register_element("progress_bar", { value = 0.0, text = "" }, function(self, ui)
-  handle_reponse(self, ui:progress_bar(self.props.value, self.props.text, self.props.style))
+  handle_reponse(self, ui:progress_bar(self.props.value, self.props.text))
 end)
 
 ui.TextEditSingleLine = register_element("input", { value = "" }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:text_edit_singleline(self.props.value, self.props.style)))
+  handle_reponse(self, handle_change(self, "value", ui:text_edit_singleline(self.props.value)))
 end)
 ui.TextEditMultiLine = register_element("textbox", { value = "" }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:text_edit_multiline(self.props.value, self.props.style)))
+  handle_reponse(self, handle_change(self, "value", ui:text_edit_multiline(self.props.value)))
 end)
 
 ui.Align = register_element("align", { align = "start", layout = "left_to_right" }, function(self, ui)
   ui:align(self.props.layout, self.props.align, function(ui)
     render_from(self.children, ui)
-  end, self.props.style)
+  end)
 end)
 
 ui.CollapsingHeader = register_element("collapsing_header", { text = "" }, function(self, ui)
   ui:collapsing_header(self.props.text, function(ui)
     render_from(self.children, ui)
-  end, self.props.style)
+  end)
 end)
 
 ui.ScrollArea = register_element("scroll-area", {}, function(self, ui)
   ui:scroll_area(function(ui)
     render_from(self.children, ui)
-  end, self.props.style)
+  end)
 end)
 
 ui.HBox = register_element("hbox", {}, function(self, ui)
   ui:horizontal(function(ui)
     render_from(self.children, ui)
-  end, self.props.style)
+  end)
 end)
 
 ui.VBox = register_element("vbox", {}, function(self, ui)
   ui:vertical(function(ui)
     render_from(self.children, ui)
-  end, self.props.style)
+  end)
 end)
 
 ui.StyleWrapper = register_element("style", {}, function(self, ui)
@@ -403,14 +491,84 @@ ui.Handle = register_element("handle", { render = function(ui) end }, function(s
   self.props.render(ui)
 end)
 
+ui.Each = register_element("each", { items = {}, render = function(ui) end }, function(self, ui)
+  local items = self.props.items
+
+  local function render_item(item, index, array)
+    local returns = self.props.render(item, index, array, ui)
+    if returns then
+      render_from(Vec({returns}), ui)
+    end
+  end
+
+  if instanceof(items, Vec) then
+    items:for_each(render_item)
+  elseif type(items) == "table" then
+    for k, v in ipairs(items) do
+      render_item(v, k, items)
+    end
+  end
+end)
+
 function lml_create(name, props, ...)
   if default_elements[name] then
     return default_elements[name](props, {...})
+  elseif name and type(name) == "table" and name.__call_init then
+    local instance = name({
+      name = "_",
+      props = props,
+    });
+    if instance.prepare then instance:prepare(props, ...) end
+    if instance.states then
+      local build = instance.build
+      setfenv(build, setmetatable(instance, { __index = _G }))
+      return build(instance, ...)
+    else
+      return instance:build(...)
+    end
+  elseif name and type(name) == "function" then
+    return name(props, ...)
   end
+end
+
+function StatedComponent(states)
+  return function(_class)
+    function _class:init()
+      self.states = {}
+      for k, v in pairs(states) do
+        self[k] = State(v)
+        table.insert(self.states, k)
+      end
+    end
+
+    return _class
+  end
+end
+
+function ComponentValues(values)
+  return function(_class)
+    function _class:init()
+      for k, v in pairs(values) do
+        self[k] = v
+      end
+    end
+    return _class
+  end
+end
+
+function AutoRender(_class)
+  RenderComponent(_class)
+  return _class
 end
 
 local function render_ui(ui)
   render_from(elements, ui)
+end
+
+function RenderComponent(comp)
+  local g = lml_create(comp, {})
+  g:into_root()
+  return g
 end
 
 return function()

@@ -116,61 +116,47 @@
 --   end
 -- end)
 
+local function Item(props)
+  return lml! {
+    <label text={props.text} />
+  }
+end
 
-local clicked_state = State(0)
-local text_state = State("sksk")
-local inactive = State(false)
-local loading = State(true)
-local fetched_text = State("")
-
-async(function()
-  local dd = net.http.request("https://api.github.com")
-  loading:set(false)
-  fetched_text:set(dd.text())
-end)
-
-local t = lml! {
-  <style style={{
-      visuals = {
-        hyperlink_color = { 255, 0, 0, 255 },
-        faint_bg_color = { 255, 0, 255, 255 },
-        extreme_bg_color = { 255, 255, 0, 255 },
-        panel_fill = { 0, 255, 0, 255 },
-        inactive = {
-          bg_fill = { 255, 0, 0, 255 }
-        }
-      }
-    }}>
-    <frame inactive={loading:inverse()} style={{
-      color = { 255, 255, 0, 100 },
-      width = "fill",
-      height = "70%",
-    }}>
-      <align layout="center_both">
-        <spinner />
-      </align>
-    </frame>
-    <vbox inactive={loading}>
-      <hbox>
-        <label text="Some button:" />
-        <button style={{
-          color = { 255, 0, 0, 255 }
-        }} text={clicked_state:format("Clicked: {}")} on_clicked={function() clicked_state:add(1) end} />
-      </hbox>
-
-      <hyperlink text="https://example.com" />
-      <input value={text_state} on_changed={function() print(text_state:get()) end} />
-
-      <checkbox text="Hide Separator" checked={inactive} />
-      
-      <handle inactive={inactive} render={function(ui) ui:separator() end} />
-
-      <progress_bar value={0.6} text="Progress" />
-      <textbox value={fetched_text} />
-
-    </vbox>
-  </style>
+local class! @AutoRender @StatedComponent({
+  loading = true,
+  fetched_text = "",
+  objects = Vec({"a", "b", "c"}),
+  selected = "volvo"
+}) @ComponentValues({
+  selectables = {volvo = "Volvo", marcedes = "Marcedes", ferrari = "Ferrari"}
+}) Body:Widget, {
+  prepare(){
+    async(function()
+      sleep(1)
+      self.loading:set(false)
+    end)
+  }
+  build(){
+    return lml! {
+      <style>
+        <frame inactive={loading:inverse()} style={{
+          width = "fill",
+          height = "70%",
+        }}>
+          <align layout="center_both">
+            <spinner />
+          </align>
+        </frame>
+        <vbox inactive={loading}>
+          <heading text="The Heading Text" />
+          <link text={selected:inside(selectables)} />
+          <image inactive={selected:is_not("volvo")} src="/home/makano/Pictures/coffeescript_waifu2x_art_noise3_scale.png" fit_to={{100, 100}} />
+          <combobox selected={selected} values={selectables} />
+          <each items={objects} render={function(item)
+            return <Item text={item} />
+          end} />
+        </vbox>
+      </style>
+    }
+  }
 }
-
-
-t:into_root()

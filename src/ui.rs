@@ -1,5 +1,5 @@
-use eframe::egui;
 use eframe::egui::*;
+use eframe::egui::{self, ahash::HashMap};
 use lulu::lulu::Lulu;
 use mlua::{UserData, UserDataMethods};
 
@@ -83,55 +83,56 @@ macro_rules! table_into_margin {
           }
         }
       }
-      mlua::Value::Number(n) => {
-        Margin::same(n as f32)
-      }
-      _ => {
-        Margin::same(1.0)
-      }
+      mlua::Value::Number(n) => Margin::same(n as f32),
+      _ => Margin::same(1.0),
     }
   };
 }
 macro_rules! table_into_rounding {
   ($val:expr) => {
     match $val {
-      mlua::Value::Table(t) => {
-        Rounding {
-          ne: t.get(1).unwrap(),
-          nw: t.get(2).unwrap(),
-          se: t.get(3).unwrap(),
-          sw: t.get(4).unwrap(),
-        }
-      }
-      mlua::Value::Number(n) => {
-        Rounding::same(n as f32)
-      }
-      _ => {
-        Rounding::same(1.0)
-      }
+      mlua::Value::Table(t) => Rounding {
+        ne: t.get(1).unwrap(),
+        nw: t.get(2).unwrap(),
+        se: t.get(3).unwrap(),
+        sw: t.get(4).unwrap(),
+      },
+      mlua::Value::Number(n) => Rounding::same(n as f32),
+      _ => Rounding::same(1.0),
     }
   };
 }
 
 macro_rules! widget_style {
   ($state:ident, $table:expr, $style:expr) => {
-    set_attrib!( (stringify!($state), mlua::Table), $table, |style_table: mlua::Table| {
-      set_attrib!( ("bg_fill", mlua::Table), style_table, |val: mlua::Table| {
-        is_color!(val, $style.visuals.widgets.$state.bg_fill);
-      });
-      set_attrib!( ("weak_bg_fill", mlua::Table), style_table, |val: mlua::Table| {
-        is_color!(val, $style.visuals.widgets.$state.weak_bg_fill);
-      });
-      // set_attrib!( ("bg_stroke", mlua::Table), style_table, |val: mlua::Table| {
+    set_attrib!(
+      (stringify!($state), mlua::Table),
+      $table,
+      |style_table: mlua::Table| {
+        set_attrib!(("bg_fill", mlua::Table), style_table, |val: mlua::Table| {
+          is_color!(val, $style.visuals.widgets.$state.bg_fill);
+        });
+        set_attrib!(
+          ("weak_bg_fill", mlua::Table),
+          style_table,
+          |val: mlua::Table| {
+            is_color!(val, $style.visuals.widgets.$state.weak_bg_fill);
+          }
+        );
+        // set_attrib!( ("bg_stroke", mlua::Table), style_table, |val: mlua::Table| {
         // $style.visuals.widgets.$state.bg_stroke
-      // });
-      set_attrib!( ("rounding", mlua::Value), style_table, |val: mlua::Value| {
-        $style.visuals.widgets.$state.rounding = table_into_rounding!(val);
-      });
-    });
+        // });
+        set_attrib!(
+          ("rounding", mlua::Value),
+          style_table,
+          |val: mlua::Value| {
+            $style.visuals.widgets.$state.rounding = table_into_rounding!(val);
+          }
+        );
+      }
+    );
   };
 }
-
 
 macro_rules! scoped_function_call {
   ($lua:expr, $ui:expr,  $func:expr) => {
@@ -150,7 +151,6 @@ macro_rules! scoped_function_call {
 
 macro_rules! stylize_element {
   ($element:ident, $style:ident) => {
-
     if let Ok(color_tbl) = $style.get::<mlua::Table>("color") {
       $element = $element.fill(color_from_lua_table(color_tbl).unwrap());
     }
@@ -166,7 +166,6 @@ macro_rules! stylize_element {
     if let Ok(rounding) = $style.get::<mlua::Value>("rounding") {
       $element = $element.rounding(table_into_rounding!(rounding));
     }
-
   };
 }
 
@@ -222,13 +221,27 @@ impl UserData for LuaUiResponse {
     fields.add_field_method_get("middle_clicked", |_, this| Ok(this.res.middle_clicked()));
     fields.add_field_method_get("double_clicked", |_, this| Ok(this.res.double_clicked()));
     fields.add_field_method_get("triple_clicked", |_, this| Ok(this.res.triple_clicked()));
-    fields.add_field_method_get("clicked_elsewhere", |_, this| Ok(this.res.clicked_elsewhere()));
+    fields.add_field_method_get("clicked_elsewhere", |_, this| {
+      Ok(this.res.clicked_elsewhere())
+    });
     fields.add_field_method_get("lost_focus", |_, this| Ok(this.res.lost_focus()));
     fields.add_field_method_get("gained_focus", |_, this| Ok(this.res.gained_focus()));
     fields.add_field_method_get("has_focus", |_, this| Ok(this.res.has_focus()));
-    fields.add_field_method_get("drag_delta", |_, this| Ok(vec![this.res.drag_delta().x, this.res.drag_delta().y]));
+    fields.add_field_method_get("drag_delta", |_, this| {
+      Ok(vec![this.res.drag_delta().x, this.res.drag_delta().y])
+    });
     fields.add_field_method_get("hovered", |_, this| Ok(this.res.hovered()));
-    fields.add_field_method_get("changed", |_, this| Ok(this.res.changed()));
+    fields.add_field_method_get("changed", |_, this| {
+      if let Some(mlua::Value::Table(v)) = this.value.clone() {
+        if let Ok(r) = v.get::<bool>("changed"){
+          Ok(r)
+        } else {
+          Ok(this.res.changed())
+        }
+      } else {
+        Ok(this.res.changed())
+      }
+    });
     fields.add_field_method_get("highlighted", |_, this| Ok(this.res.highlighted()));
     fields.add_field_method_get("contains_pointer", |_, this| {
       Ok(this.res.contains_pointer())
@@ -253,20 +266,65 @@ struct LuaUi<'ui> {
 
 impl<'ui> UserData for LuaUi<'ui> {
   fn add_methods<'lua, M: UserDataMethods<Self>>(methods: &mut M) {
-    methods.add_method_mut("button", |_lua, this, (text, style) : (String, Option<mlua::Table>)| {
-      let mut button = Button::new(text);
+    methods.add_method_mut(
+      "button",
+      |_lua, this, (text, style): (String, Option<mlua::Table>)| {
+        let mut button = Button::new(text);
 
-      if let Some(style_table) = style {
-        stylize_element!(button, style_table);
-      }
+        if let Some(style_table) = style {
+          stylize_element!(button, style_table);
+        }
 
-      let res: Response = this.ui.add(button);
-      
-      Ok(LuaUiResponse { res, value: None })
+        let res: Response = this.ui.add(button);
+
+        Ok(LuaUiResponse { res, value: None })
+      },
+    );
+    methods.add_method_mut("colored_label", |_lua, this, (text, color): (String, mlua::Table)| {
+      Ok(LuaUiResponse {
+        res: this.ui.colored_label(color_from_lua_table(color).unwrap(), text),
+        value: None,
+      })
     });
     methods.add_method_mut("label", |_lua, this, text: String| {
       Ok(LuaUiResponse {
         res: this.ui.label(text),
+        value: None,
+      })
+    });
+    methods.add_method_mut("heading", |_lua, this, text: String| {
+      Ok(LuaUiResponse {
+        res: this.ui.heading(text),
+        value: None,
+      })
+    });
+    methods.add_method_mut("small", |_lua, this, text: String| {
+      Ok(LuaUiResponse {
+        res: this.ui.small(text),
+        value: None,
+      })
+    });
+    methods.add_method_mut("monospace", |_lua, this, text: String| {
+      Ok(LuaUiResponse {
+        res: this.ui.monospace(text),
+        value: None,
+      })
+    });
+    methods.add_method_mut("strong", |_lua, this, text: String| {
+      Ok(LuaUiResponse {
+        res: this.ui.strong(text),
+        value: None,
+      })
+    });
+    methods.add_method_mut("weak", |_lua, this, text: String| {
+      Ok(LuaUiResponse {
+        res: this.ui.weak(text),
+        value: None,
+      })
+    });
+    methods.add_method_mut("selectable_value", |_lua, this, (mut current, selected, text): (String, String, String)| {
+      Ok(LuaUiResponse {
+        res: this.ui.selectable_value(&mut current, selected, text),
         value: None,
       })
     });
@@ -284,9 +342,137 @@ impl<'ui> UserData for LuaUi<'ui> {
       Ok(lua_response)
     });
 
+    methods.add_method_mut(
+      "image",
+      |_lua, this, (source, options): (mlua::Value, Option<mlua::Table>)| {
+        let mut img = match source {
+          mlua::Value::UserData(ud) => {
+            if let Ok(bytes) = ud.borrow::<lulu::ops::LuluByteArray>() {
+              Image::from_bytes("lua_image", bytes.bytes.clone())
+            } else {
+              Image::new(include_image!("../assets/images/image-load-failed.png"))
+            }
+          }
+
+          mlua::Value::String(s) => {
+            let src = s.to_str().unwrap();
+
+            if src.starts_with("http://") || src.starts_with("https://") {
+              Image::from_uri(src.to_string())
+            } else {
+              if let Ok(bytes) = std::fs::read(src.to_string()) {
+                Image::from_bytes(src.to_string(), bytes)
+              } else {
+                Image::new(include_image!("../assets/images/image-load-failed.png"))
+              }
+            }
+          }
+
+          _ => {
+            eprintln!("Unsupported value passed to ui:image");
+            Image::new(include_image!("../assets/images/image-load-failed.png"))
+          }
+        };
+
+        if let Some(options) = options {
+          if let Ok(size) = options.get::<f32>("fit_original") {
+            img = img.fit_to_original_size(size);
+          }
+          if let Ok(maintain_aspect_ratio) = options.get::<bool>("maintain_aspect_ratio") {
+            img = img.maintain_aspect_ratio(maintain_aspect_ratio);
+          }
+          if let Ok(fit) = options.get::<mlua::Table>("fit_to") {
+            let size = Vec2::new(fit.get(1).unwrap(), fit.get(2).unwrap());
+            img = img.fit_to_exact_size(size);
+          }
+          if let Ok(rotate) = options.get::<mlua::Table>("rotate") {
+            let origin = Vec2::new(rotate.get(1).unwrap(), rotate.get(2).unwrap());
+            img = img.rotate(rotate.get(3).unwrap(), origin);
+          }
+          if let Ok(rounding) = options.get::<mlua::Value>("rounding") {
+            img = img.rounding(table_into_rounding!(rounding));
+          }
+          if let Ok(spinner) = options.get::<bool>("spinner") {
+            img = img.show_loading_spinner(spinner);
+          }
+        }
+
+        Ok(LuaUiResponse {
+          res: this.ui.add(img),
+          value: None,
+        })
+      },
+    );
+
+    methods.add_method_mut(
+      "combobox",
+      |lua, this, (label, mut selected_key, values, func): (String, String, HashMap<String, String>, Option<mlua::Function>)| {
+        let selected_key_old = selected_key.clone();
+
+        let mut keys: Vec<_> = values.keys().cloned().collect();
+        keys.sort();
+        
+        let res = egui::ComboBox::from_label(label)
+          .selected_text(values.get(&selected_key).unwrap_or(&selected_key))
+          .show_ui(this.ui, |ui| {
+            for key in keys {
+              let value = values.get(&key).unwrap();
+              if let Some(func) = func.clone() {
+                let selected_key_old = selected_key_old.clone();
+                let new_selected = lua
+                  .scope(|_scope| {
+                    let lua_ui = _scope.create_userdata(LuaUi { ui }).unwrap();
+                    let temp_func = _scope
+                      .create_function(move |_lua, selected_key_old: String| func.call::<Option<String>>((lua_ui.clone(), selected_key_old, key.clone(), value.clone())))
+                      .unwrap();
+                    temp_func.call::<Option<String>>(selected_key_old)
+                  })
+                  .unwrap();
+                if let Some(new_selected) = new_selected {
+                  selected_key = new_selected
+                }
+              } else {
+                ui.selectable_value(&mut selected_key, key.clone(), value);
+              }
+            }
+          })
+          .response;
+
+        let value = if selected_key_old != selected_key {
+          let table = lua.create_table()?;
+          table.set("changed", true)?;
+          table.set("__value", selected_key)?;
+          Some(mlua::Value::Table(table))
+        } else {
+          None
+        };
+
+        let lua_response = lua.create_userdata(LuaUiResponse {
+          res,
+          value,
+        })?;
+
+        Ok(lua_response)
+      },
+    );
+
     methods.add_method_mut("text_edit_multiline", |lua, this, text: String| {
       let mut value = text;
       let res = this.ui.text_edit_multiline(&mut value);
+
+      let lua_value = lua.create_string(&value)?;
+
+      let lua_response = lua.create_userdata(LuaUiResponse {
+        res,
+        value: Some(mlua::Value::String(lua_value)),
+      })?;
+
+      Ok(lua_response)
+    });
+    
+    methods.add_method_mut("code_editor", |lua, this, text: String| {
+      let mut value = text;
+      let res = this.ui.code_editor(&mut value);
 
       let lua_value = lua.create_string(&value)?;
 
@@ -328,6 +514,15 @@ impl<'ui> UserData for LuaUi<'ui> {
     });
     methods.add_method_mut("hyperlink", |_lua, this, url: String| {
       ui_resp!(this.ui.hyperlink(url))
+    });
+    methods.add_method_mut("hyperlink_to", |_lua, this, (text, url): (String, String)| {
+      ui_resp!(this.ui.hyperlink_to(text, url))
+    });
+    methods.add_method_mut("link", |_lua, this, url: String| {
+      ui_resp!(this.ui.link(url))
+    });
+    methods.add_method_mut("code", |_lua, this, text: String| {
+      ui_resp!(this.ui.code(text))
     });
     methods.add_method_mut(
       "radio_button",
@@ -636,187 +831,185 @@ impl<'ui> UserData for LuaUi<'ui> {
       Ok(())
     });
 
-    methods.add_method_mut("set_style", |_, this, (style_table, context): (mlua::Table, bool)| {
-      let ctx = this.ui.ctx();
-      let mut style = (*ctx.style()).clone();
+    methods.add_method_mut(
+      "set_style",
+      |_, this, (style_table, context): (mlua::Table, bool)| {
+        let ctx = this.ui.ctx();
+        let mut style = (*ctx.style()).clone();
 
-      if let Ok(wrap) = style_table.get::<bool>("wrap") {
-        style.wrap = Some(wrap);
-      }
-
-      set_attrib!(
-        ("spacing", mlua::Table),
-        style_table,
-        |style_table: mlua::Table| {
-          set_attrib!(
-            ("item_spacing", mlua::Table),
-            style_table,
-            |val: mlua::Table| {
-              style.spacing.item_spacing =
-                Vec2::new(val.get(1).unwrap_or(1.0), val.get(2).unwrap_or(1.0))
-            }
-          );
-
-          set_attrib!(
-            ("button_padding", mlua::Table),
-            style_table,
-            |val: mlua::Table| {
-              style.spacing.button_padding =
-                Vec2::new(val.get(1).unwrap_or(1.0), val.get(2).unwrap_or(1.0))
-            }
-          );
-
-          set_attrib!(
-            ("interact_size", mlua::Table),
-            style_table,
-            |val: mlua::Table| {
-              style.spacing.interact_size =
-                Vec2::new(val.get(1).unwrap_or(1.0), val.get(2).unwrap_or(1.0))
-            }
-          );
-
-          set_attrib!(
-            ("menu_margin", mlua::Value),
-            style_table,
-            |val: mlua::Value| {
-              style.spacing.menu_margin = table_into_margin!(val)
-            }
-          );
-
-          set_attrib!(("indent", f32), style_table, |val: f32| style
-            .spacing
-            .indent = val);
-
-          set_attrib!(("slider_width", f32), style_table, |val: f32| style
-            .spacing
-            .slider_width =
-            val);
-
-          set_attrib!(("combo_width", f32), style_table, |val: f32| style
-            .spacing
-            .combo_width =
-            val);
-
-          set_attrib!(("text_edit_width", f32), style_table, |val: f32| style
-            .spacing
-            .text_edit_width =
-            val);
-
-          set_attrib!(("icon_width", f32), style_table, |val: f32| style
-            .spacing
-            .icon_width =
-            val);
-
-          set_attrib!(("icon_width_inner", f32), style_table, |val: f32| style
-            .spacing
-            .icon_width_inner =
-            val);
-
-          set_attrib!(("icon_spacing", f32), style_table, |val: f32| style
-            .spacing
-            .icon_spacing =
-            val);
-
-          set_attrib!(("tooltip_width", f32), style_table, |val: f32| style
-            .spacing
-            .tooltip_width =
-            val);
-
-          set_attrib!(("combo_height", f32), style_table, |val: f32| style
-            .spacing
-            .combo_height =
-            val);
+        if let Ok(wrap) = style_table.get::<bool>("wrap") {
+          style.wrap = Some(wrap);
         }
-      );
 
-      set_attrib!(
-        ("visuals", mlua::Table),
-        style_table,
-        |style_table: mlua::Table| {
+        set_attrib!(
+          ("spacing", mlua::Table),
+          style_table,
+          |style_table: mlua::Table| {
+            set_attrib!(
+              ("item_spacing", mlua::Table),
+              style_table,
+              |val: mlua::Table| {
+                style.spacing.item_spacing =
+                  Vec2::new(val.get(1).unwrap_or(1.0), val.get(2).unwrap_or(1.0))
+              }
+            );
 
-          set_attrib!(("dark_mode", bool), style_table, |val: bool| style
-            .visuals
-            .dark_mode =
-            val);
-            
-          widget_style!(noninteractive, style_table, style);
-          widget_style!(inactive, style_table, style);
-          widget_style!(hovered, style_table, style);
-          widget_style!(active, style_table, style);
-          widget_style!(open, style_table, style);
+            set_attrib!(
+              ("button_padding", mlua::Table),
+              style_table,
+              |val: mlua::Table| {
+                style.spacing.button_padding =
+                  Vec2::new(val.get(1).unwrap_or(1.0), val.get(2).unwrap_or(1.0))
+              }
+            );
 
-          set_attrib!(
-            ("hyperlink_color", mlua::Table),
-            style_table,
-            |val: mlua::Table| is_color!(val, style.visuals.hyperlink_color)
-          );
-          
-          set_attrib!(
-            ("faint_bg_color", mlua::Table),
-            style_table,
-            |val: mlua::Table| is_color!(val, style.visuals.faint_bg_color)
-          );
-          
-          set_attrib!(
-            ("extreme_bg_color", mlua::Table),
-            style_table,
-            |val: mlua::Table| is_color!(val, style.visuals.extreme_bg_color)
-          );
-          
-          set_attrib!(
-            ("code_bg_color", mlua::Table),
-            style_table,
-            |val: mlua::Table| is_color!(val, style.visuals.code_bg_color)
-          );
-          
-          set_attrib!(
-            ("warn_fg_color", mlua::Table),
-            style_table,
-            |val: mlua::Table| is_color!(val, style.visuals.warn_fg_color)
-          );
-          
-          set_attrib!(
-            ("error_fg_color", mlua::Table),
-            style_table,
-            |val: mlua::Table| is_color!(val, style.visuals.error_fg_color)
-          );
-          
-          set_attrib!(
-            ("window_rounding", mlua::Value),
-            style_table,
-            |val: mlua::Value| style.visuals.window_rounding = table_into_rounding!(val)
-          );
-          
-          set_attrib!(
-            ("window_fill", mlua::Table),
-            style_table,
-            |val: mlua::Table| is_color!(val, style.visuals.window_fill)
-          );
+            set_attrib!(
+              ("interact_size", mlua::Table),
+              style_table,
+              |val: mlua::Table| {
+                style.spacing.interact_size =
+                  Vec2::new(val.get(1).unwrap_or(1.0), val.get(2).unwrap_or(1.0))
+              }
+            );
 
-          set_attrib!(
-            ("panel_fill", mlua::Table),
-            style_table,
-            |val: mlua::Table| is_color!(val, style.visuals.panel_fill)
-          );
+            set_attrib!(
+              ("menu_margin", mlua::Value),
+              style_table,
+              |val: mlua::Value| { style.spacing.menu_margin = table_into_margin!(val) }
+            );
 
-          if let Ok(text_table) = style_table.get::<mlua::Table>("text_color") {
-            if let Some(color) = color_from_lua_table(text_table) {
-              style.visuals.override_text_color = Some(color);
+            set_attrib!(("indent", f32), style_table, |val: f32| style
+              .spacing
+              .indent = val);
+
+            set_attrib!(("slider_width", f32), style_table, |val: f32| style
+              .spacing
+              .slider_width =
+              val);
+
+            set_attrib!(("combo_width", f32), style_table, |val: f32| style
+              .spacing
+              .combo_width =
+              val);
+
+            set_attrib!(("text_edit_width", f32), style_table, |val: f32| style
+              .spacing
+              .text_edit_width =
+              val);
+
+            set_attrib!(("icon_width", f32), style_table, |val: f32| style
+              .spacing
+              .icon_width =
+              val);
+
+            set_attrib!(("icon_width_inner", f32), style_table, |val: f32| style
+              .spacing
+              .icon_width_inner =
+              val);
+
+            set_attrib!(("icon_spacing", f32), style_table, |val: f32| style
+              .spacing
+              .icon_spacing =
+              val);
+
+            set_attrib!(("tooltip_width", f32), style_table, |val: f32| style
+              .spacing
+              .tooltip_width =
+              val);
+
+            set_attrib!(("combo_height", f32), style_table, |val: f32| style
+              .spacing
+              .combo_height =
+              val);
+          }
+        );
+
+        set_attrib!(
+          ("visuals", mlua::Table),
+          style_table,
+          |style_table: mlua::Table| {
+            set_attrib!(("dark_mode", bool), style_table, |val: bool| style
+              .visuals
+              .dark_mode =
+              val);
+
+            widget_style!(noninteractive, style_table, style);
+            widget_style!(inactive, style_table, style);
+            widget_style!(hovered, style_table, style);
+            widget_style!(active, style_table, style);
+            widget_style!(open, style_table, style);
+
+            set_attrib!(
+              ("hyperlink_color", mlua::Table),
+              style_table,
+              |val: mlua::Table| is_color!(val, style.visuals.hyperlink_color)
+            );
+
+            set_attrib!(
+              ("faint_bg_color", mlua::Table),
+              style_table,
+              |val: mlua::Table| is_color!(val, style.visuals.faint_bg_color)
+            );
+
+            set_attrib!(
+              ("extreme_bg_color", mlua::Table),
+              style_table,
+              |val: mlua::Table| is_color!(val, style.visuals.extreme_bg_color)
+            );
+
+            set_attrib!(
+              ("code_bg_color", mlua::Table),
+              style_table,
+              |val: mlua::Table| is_color!(val, style.visuals.code_bg_color)
+            );
+
+            set_attrib!(
+              ("warn_fg_color", mlua::Table),
+              style_table,
+              |val: mlua::Table| is_color!(val, style.visuals.warn_fg_color)
+            );
+
+            set_attrib!(
+              ("error_fg_color", mlua::Table),
+              style_table,
+              |val: mlua::Table| is_color!(val, style.visuals.error_fg_color)
+            );
+
+            set_attrib!(
+              ("window_rounding", mlua::Value),
+              style_table,
+              |val: mlua::Value| style.visuals.window_rounding = table_into_rounding!(val)
+            );
+
+            set_attrib!(
+              ("window_fill", mlua::Table),
+              style_table,
+              |val: mlua::Table| is_color!(val, style.visuals.window_fill)
+            );
+
+            set_attrib!(
+              ("panel_fill", mlua::Table),
+              style_table,
+              |val: mlua::Table| is_color!(val, style.visuals.panel_fill)
+            );
+
+            if let Ok(text_table) = style_table.get::<mlua::Table>("text_color") {
+              if let Some(color) = color_from_lua_table(text_table) {
+                style.visuals.override_text_color = Some(color);
+              }
             }
           }
+        );
 
-
+        if context {
+          ctx.set_style(style);
+        } else {
+          this.ui.set_style(style);
         }
-      );
 
-      if context {
-        ctx.set_style(style);
-      } else {
-        this.ui.set_style(style);
-      }
-
-      Ok(())
-    });
+        Ok(())
+      },
+    );
 
     methods.add_method_mut("set_spacing", |_, this, spacing: f32| {
       let ctx = this.ui.ctx();
@@ -1021,6 +1214,7 @@ impl LuluUiApp {
     main: Option<mlua::Value>,
     err: Option<String>,
   ) -> Self {
+    egui_extras::install_image_loaders(&_cc.egui_ctx);
     lulu.lua.set_app_data(_cc.egui_ctx.clone());
 
     lulu
@@ -1114,14 +1308,18 @@ impl eframe::App for LuluUiApp {
       .lulu
       .lua
       .globals()
-      .get::<mlua::Table>("coroutine").unwrap()
-      .get("resume").unwrap();
+      .get::<mlua::Table>("coroutine")
+      .unwrap()
+      .get("resume")
+      .unwrap();
     let sched_co: mlua::Value = self
       .lulu
       .lua
       .globals()
-      .get::<mlua::Table>("Future").unwrap()
-      .get("scheduler").unwrap();
+      .get::<mlua::Table>("Future")
+      .unwrap()
+      .get("scheduler")
+      .unwrap();
 
     scheduler.call::<mlua::Value>(sched_co.clone()).unwrap();
   }
@@ -1140,9 +1338,7 @@ async fn load_main(lulu: &mut Lulu) -> Result<mlua::Value, String> {
     .eval()
     .map_err(|e| e.to_string())?;
 
-  lulu
-    .exec_mod(&main_name)
-    .map_err(|e| e.to_string())?;
+  lulu.exec_mod(&main_name).map_err(|e| e.to_string())?;
   Ok(f)
 }
 
