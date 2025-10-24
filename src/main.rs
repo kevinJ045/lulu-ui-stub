@@ -9,16 +9,19 @@ async fn main() -> mlua::Result<()> {
       lulu::lulu::Lulu::new(Some(std::env::args().skip(1).collect()),
       Some(std::env::current_exe()?.parent().unwrap().to_path_buf()));
 
-  // Read font bytes
-  let font_bytes = std::fs::read("assets/fonts/DejaVuSansMono.ttf")
-      .map_err(|e| mlua::Error::external(format!("Failed to read font file: {}", e)))?;
+  let font_bytes = include_bytes!("../assets/fonts/DejaVuSansMono.ttf");
   let lua_font_bytes = lulu.lua.create_string(&font_bytes)?;
   lulu.lua.globals().set("DEJAVU_FONT_BYTES", lua_font_bytes)?;
 
 
-  let lua_code = std::fs::read_to_string("src/lua/test.lua")?;
-  lulu.add_mod_from_code("main".to_string(), lua_code, None);
-
+  if let Some(mods) = lulu::bundle::load_embedded_scripts() {
+    lulu::bundle::reg_bundle_nods(&mut lulu, mods)?;
+  } else {
+    let path = std::path::Path::new("test/test.lua");
+    if path.exists() {
+      lulu.entry_mod_path(path.to_path_buf())?;
+    }
+  }
   lulu::handle_error!(ui::run(&mut lulu).await.map_err(|e| mlua::Error::external(e.to_string())));
 
   Ok(())
