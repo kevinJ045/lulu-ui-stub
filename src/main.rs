@@ -21,6 +21,10 @@ async fn main() -> mlua::Result<()> {
     if path.exists() {
       lulu.entry_mod_path(path.to_path_buf())?;
     }
+    let path = std::path::Path::new("test/main.lua");
+    if path.exists() {
+      lulu.entry_mod_path(path.to_path_buf())?;
+    }
   }
   lulu::handle_error!(ui::run(&mut lulu).await.map_err(|e| mlua::Error::external(e.to_string())));
 

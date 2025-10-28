@@ -71,6 +71,22 @@ class! @into_collectible("collect") State(@default_to("") value), {
     return self
   }
 
+  key(key, val){
+    self.value[key] = val
+    if self.on_set then
+      self.on_set(val)
+    end
+    return self
+  }
+
+  push(val){
+    self.value:push(val)
+    if self.on_set then
+      self.on_set(val)
+    end
+    return self
+  }
+
   add(val){
     if type(self.value) == "string" then
       self:set(self.value .. val)
@@ -88,7 +104,7 @@ class! @into_collectible("collect") State(@default_to("") value), {
   
   sub(val){
     if type(self.value) == "number" then
-      self.value = self.value - val
+      self:set(self.value - val)
     end
   }
 }
@@ -103,53 +119,65 @@ function remove_node_from(children, node)
   end)
 end
 
+
+local function prepare_props(props)
+  props.children = nil
+  props.name = nil
+
+  local proxy = {}
+
+  local raw_props = props
+  setmetatable(proxy, {
+    __index = function(_, key)
+      local val = raw_props[key]
+      if val ~= nil and type(val) == "table" and instanceof(val, State) then
+        return val:get()
+      end
+      if key == "__real" then
+        return raw_props
+      end
+      return val
+    end,
+
+    __newindex = function(_, key, val)
+      if raw_props[key] ~= nil and type(raw_props[key]) == "table" and instanceof(raw_props[key], State) then
+        raw_props[key]:set(val)
+      else
+        raw_props[key] = val
+      end
+    end,
+
+    __pairs = function(t)
+      return function(_, k)
+        local next_key, next_val = next(t, k)
+        if next_val ~= nil and instanceof(next_val, State) then
+          return next_key, next_val:get()
+        end
+        return next_key, next_val
+      end, t, nil
+    end,
+
+    __len = function()
+      return #raw_props
+    end,
+  })
+
+  return proxy
+end
+
 class! @into_collectible("collect") Node(@default_to("") #name, @default_to(Vec()) #children, @default_to({}) #props), {
   init(){
+    if self.props.children then
+      self.children = Vec(self.props.children)
+      self.props.children = nil
+    end
     if not instanceof(self.children, Vec) then
       self.children = Vec(self.children)
     end
     self.id = id
     id = id + 1
 
-    local raw_props = self.props
-    local proxy = {}
-
-    setmetatable(proxy, {
-      __index = function(_, key)
-        local val = raw_props[key]
-        if val ~= nil and type(val) == "table" and instanceof(val, State) then
-          return val:get()
-        end
-        if key == "__real" then
-          return raw_props
-        end
-        return val
-      end,
-
-      __newindex = function(_, key, val)
-        if raw_props[key] ~= nil and type(raw_props[key]) == "table" and instanceof(raw_props[key], State) then
-          raw_props[key]:set(val)
-        else
-          raw_props[key] = val
-        end
-      end,
-
-      __pairs = function(t)
-        return function(_, k)
-          local next_key, next_val = next(t, k)
-          if next_val ~= nil and instanceof(next_val, State) then
-            return next_key, next_val:get()
-          end
-          return next_key, next_val
-        end, t, nil
-      end,
-
-      __len = function()
-        return #raw_props
-      end,
-    })
-
-    self.props = proxy
+    self.props = prepare_props(self.props)
   }
 
   add(...){
@@ -247,7 +275,6 @@ class! Widget:Node, {
   get(prop){
     return self.props[prop]
   }
-  _render(){}
 }
 
 local default_elements = {}
@@ -311,7 +338,11 @@ end
 
 local function handle_change(self, name, response)
   if response.changed then
-    self.props[name] = get_value(response.value)
+    if instanceof(self.props[name], State) then
+      self.props[name]:set(get_value(response.value))
+    else
+      self.props[name] = get_value(response.value)
+    end
   end
 
   return response
@@ -345,64 +376,76 @@ local function handle_reponse(self, response)
 end
 
 local function render_from(vec, ui)
+  if not vec then return end
   vec:for_each(function(v)
+    if not v then return end
     if v._render then
       if v.props.inactive then return end
-      v:_render(ui)
+      if v._render then return v:_render(ui) end
+    elseif #v > 0 then
+      render_from(Vec(v), ui)
     end
   end)
 end
 
+local function get_prop_val(val)
+  if instanceof(val, State) then
+    return val:get()
+  else
+    return val
+  end
+end
+
 ui.ColoredLabel = register_element("colored_label", { text = "", color = { 150, 150, 150, 255 } }, function(self, ui)
-  handle_reponse(self, ui:colored_label(self.props.text, self.props.color))
+  handle_reponse(self, ui:colored_label(get_prop_val(self.props.text), get_prop_val(self.props.color)))
 end)
 
 ui.Label = register_element("label", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:label(self.props.text))
+  handle_reponse(self, ui:label(get_prop_val(self.props.text)))
 end)
 
 ui.Heading = register_element("heading", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:heading(self.props.text))
+  handle_reponse(self, ui:heading(get_prop_val(self.props.text)))
 end)
 
 ui.Small = register_element("small", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:small(self.props.text))
+  handle_reponse(self, ui:small(get_prop_val(self.props.text)))
 end)
 
 ui.Weak = register_element("weak", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:weak(self.props.text))
+  handle_reponse(self, ui:weak(get_prop_val(self.props.text)))
 end)
 
 ui.Strong = register_element("strong", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:strong(self.props.text))
+  handle_reponse(self, ui:strong(get_prop_val(self.props.text)))
 end)
 
 ui.Monospace = register_element("monospace", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:monospace(self.props.text))
+  handle_reponse(self, ui:monospace(get_prop_val(self.props.text)))
 end)
 
 ui.Hyperlink = register_element("hyperlink", { text = "" }, function(self, ui)
-  handle_reponse(self, self.props.url and ui:hyperlink_to(self.props.text, self.props.url) or ui:hyperlink(self.props.text))
+  handle_reponse(self, self.props.url and ui:hyperlink_to(get_prop_val(self.props.text), get_prop_val(self.props.url)) or ui:hyperlink(get_prop_val(self.props.text)))
 end)
 
 ui.Link = register_element("link", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:link(self.props.text))
+  handle_reponse(self, ui:link(get_prop_val(self.props.text)))
 end)
 
 ui.Button = register_element("button", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:button(self.props.text, self.props.style))
+  handle_reponse(self, ui:button(get_prop_val(self.props.text), get_prop_val(self.props.style)))
 end)
 
 ui.Checkbox = register_element("checkbox", { text = "", checked = false }, function(self, ui)
-  handle_reponse(self, handle_change(self, "checked", ui:checkbox(self.props.text, self.props.checked)))
+  handle_reponse(self, handle_change(self, "checked", ui:checkbox(get_prop_val(self.props.text), get_prop_val(self.props.checked))))
 end)
 
 ui.Dragvalue = register_element("drag_value", { text = "", min = 0.0, max = 100.0, value = 0.0 }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:drag_value(self.props.text, self.props.value)))
+  handle_reponse(self, handle_change(self, "value", ui:drag_value(get_prop_val(self.props.text), get_prop_val(self.props.value))))
 end)
 
 ui.Slider = register_element("slider", { text = "", value = 0.0 }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:drag_value(self.props.text, self.props.value)))
+  handle_reponse(self, handle_change(self, "value", ui:drag_value(get_prop_val(self.props.text), get_prop_val(self.props.value))))
 end)
 
 ui.Separator = register_element("separator", {}, function(self, ui)
@@ -414,40 +457,40 @@ ui.Spinner = register_element("spinner", {}, function(self, ui)
 end)
 
 ui.Image = register_element("image", {}, function(self, ui)
-  handle_reponse(self, ui:image(self.props.src, self.props))
+  handle_reponse(self, ui:image(get_prop_val(self.props.src), self.props))
 end)
 
 ui.Combobox = register_element("combobox", { text = "Select", selected = "", values = {} }, function(self, ui)
-  handle_reponse(self, handle_change(self, "selected", ui:combobox(self.props.text, self.props.selected, self.props.values, self.props.render_item)))
+  handle_reponse(self, handle_change(self, "selected", ui:combobox(get_prop_val(self.props.text), get_prop_val(self.props.selected), get_prop_val(self.props.values), self.props.render_item)))
 end)
 
 ui.Code = register_element("code", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:code(self.props.text))
+  handle_reponse(self, ui:code(get_prop_val(self.props.text)))
 end)
 
 ui.CodeEditor = register_element("code_editor", { text = "" }, function(self, ui)
-  handle_reponse(self, handle_change(self, "text", ui:code_editor(self.props.text)))
+  handle_reponse(self, handle_change(self, "text", ui:code_editor(get_prop_val(self.props.text))))
 end)
 
 ui.ProgressBar = register_element("progress_bar", { value = 0.0, text = "" }, function(self, ui)
-  handle_reponse(self, ui:progress_bar(self.props.value, self.props.text))
+  handle_reponse(self, ui:progress_bar(get_prop_val(self.props.value), get_prop_val(self.props.text)))
 end)
 
 ui.TextEditSingleLine = register_element("input", { value = "" }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:text_edit_singleline(self.props.value)))
+  handle_reponse(self, handle_change(self, "value", ui:text_edit_singleline(get_prop_val(self.props.value))))
 end)
 ui.TextEditMultiLine = register_element("textbox", { value = "" }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:text_edit_multiline(self.props.value)))
+  handle_reponse(self, handle_change(self, "value", ui:text_edit_multiline(get_prop_val(self.props.value))))
 end)
 
 ui.Align = register_element("align", { align = "start", layout = "left_to_right" }, function(self, ui)
-  ui:align(self.props.layout, self.props.align, function(ui)
+  ui:align(get_prop_val(self.props.layout), get_prop_val(self.props.align), function(ui)
     render_from(self.children, ui)
   end)
 end)
 
 ui.CollapsingHeader = register_element("collapsing_header", { text = "" }, function(self, ui)
-  ui:collapsing_header(self.props.text, function(ui)
+  ui:collapsing_header(get_prop_val(self.props.text), function(ui)
     render_from(self.children, ui)
   end)
 end)
@@ -476,7 +519,7 @@ ui.StyleWrapper = register_element("style", {}, function(self, ui)
 end)
 
 ui.Frame = register_element("frame", { style = {} }, function(self, ui)
-  ui:frame_block(self.props.style, function(ui)
+  ui:frame_block(get_prop_val(self.props.style), function(ui)
     render_from(self.children, ui)
   end)
 end)
@@ -492,7 +535,7 @@ ui.Handle = register_element("handle", { render = function(ui) end }, function(s
 end)
 
 ui.Each = register_element("each", { items = {}, render = function(ui) end }, function(self, ui)
-  local items = self.props.items
+  local items = get_prop_val(self.props.items)
 
   local function render_item(item, index, array)
     local returns = self.props.render(item, index, array, ui)
@@ -510,22 +553,18 @@ ui.Each = register_element("each", { items = {}, render = function(ui) end }, fu
   end
 end)
 
+function build_component(instance)
+  return instance:build(instance.props)
+end
+
 function lml_create(name, props, ...)
   if default_elements[name] then
     return default_elements[name](props, {...})
   elseif name and type(name) == "table" and name.__call_init then
-    local instance = name({
+    return name({
       name = "_",
       props = props,
-    });
-    if instance.prepare then instance:prepare(props, ...) end
-    if instance.states then
-      local build = instance.build
-      setfenv(build, setmetatable(instance, { __index = _G }))
-      return build(instance, ...)
-    else
-      return instance:build(...)
-    end
+    })
   elseif name and type(name) == "function" then
     return name(props, ...)
   end
@@ -537,9 +576,17 @@ function StatedComponent(states)
       self.states = {}
       for k, v in pairs(states) do
         self[k] = State(v)
+        table.insert(self[k]._on_set, function(val)
+          self:rebuild()
+        end)
         table.insert(self.states, k)
       end
+
     end
+
+    if not _class.rebuild then function _class:rebuild()
+      self.__built = nil
+    end end
 
     return _class
   end
@@ -561,6 +608,39 @@ function AutoRender(_class)
   return _class
 end
 
+function Component(_func)
+  local FuncComp = {}
+  if type(_func) == "function" then
+    class! FuncComp:Widget, {
+      init(arg){
+        self.props = arg
+      }
+    }
+    FuncComp.build = _func
+  else
+    FuncComp = _func
+  end
+
+  function FuncComp:init()
+    if self.prepare and not self.__prepared then
+      self:prepare(self.props)
+      self.__prepared = true
+    else 
+      self.__prepared = true
+    end
+  end
+    
+  function FuncComp:_render(ui)
+    if self.build and not self.__built and self.__prepared then
+      self.__built = Vec({
+        build_component(self)
+      })
+    end
+    render_from(self.__built, ui)
+  end
+  return FuncComp
+end
+
 local function render_ui(ui)
   render_from(elements, ui)
 end
@@ -569,6 +649,13 @@ function RenderComponent(comp)
   local g = lml_create(comp, {})
   g:into_root()
   return g
+end
+
+function UIOverride(name)
+  return function(_class)
+    _class[name] = function() end
+    return _class
+  end
 end
 
 return function()

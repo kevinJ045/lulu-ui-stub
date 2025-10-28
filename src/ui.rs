@@ -265,10 +265,10 @@ struct LuaUi<'ui> {
 }
 
 impl<'ui> UserData for LuaUi<'ui> {
-  fn add_methods<'lua, M: UserDataMethods<Self>>(methods: &mut M) {
+  fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
     methods.add_method_mut(
       "button",
-      |_lua, this, (text, style): (String, Option<mlua::Table>)| {
+      |_lua, this: &mut LuaUi, (text, style): (String, Option<mlua::Table>)| {
         let mut button = Button::new(text);
 
         if let Some(style_table) = style {
@@ -280,55 +280,55 @@ impl<'ui> UserData for LuaUi<'ui> {
         Ok(LuaUiResponse { res, value: None })
       },
     );
-    methods.add_method_mut("colored_label", |_lua, this, (text, color): (String, mlua::Table)| {
+    methods.add_method_mut("colored_label", |_lua, this: &mut LuaUi, (text, color): (String, mlua::Table)| {
       Ok(LuaUiResponse {
         res: this.ui.colored_label(color_from_lua_table(color).unwrap(), text),
         value: None,
       })
     });
-    methods.add_method_mut("label", |_lua, this, text: String| {
+    methods.add_method_mut("label", |_lua, this: &mut LuaUi, text: String| {
       Ok(LuaUiResponse {
         res: this.ui.label(text),
         value: None,
       })
     });
-    methods.add_method_mut("heading", |_lua, this, text: String| {
+    methods.add_method_mut("heading", |_lua, this: &mut LuaUi, text: String| {
       Ok(LuaUiResponse {
         res: this.ui.heading(text),
         value: None,
       })
     });
-    methods.add_method_mut("small", |_lua, this, text: String| {
+    methods.add_method_mut("small", |_lua, this: &mut LuaUi, text: String| {
       Ok(LuaUiResponse {
         res: this.ui.small(text),
         value: None,
       })
     });
-    methods.add_method_mut("monospace", |_lua, this, text: String| {
+    methods.add_method_mut("monospace", |_lua, this: &mut LuaUi, text: String| {
       Ok(LuaUiResponse {
         res: this.ui.monospace(text),
         value: None,
       })
     });
-    methods.add_method_mut("strong", |_lua, this, text: String| {
+    methods.add_method_mut("strong", |_lua, this: &mut LuaUi, text: String| {
       Ok(LuaUiResponse {
         res: this.ui.strong(text),
         value: None,
       })
     });
-    methods.add_method_mut("weak", |_lua, this, text: String| {
+    methods.add_method_mut("weak", |_lua, this: &mut LuaUi, text: String| {
       Ok(LuaUiResponse {
         res: this.ui.weak(text),
         value: None,
       })
     });
-    methods.add_method_mut("selectable_value", |_lua, this, (mut current, selected, text): (String, String, String)| {
+    methods.add_method_mut("selectable_value", |_lua, this: &mut LuaUi, (mut current, selected, text): (String, String, String)| {
       Ok(LuaUiResponse {
         res: this.ui.selectable_value(&mut current, selected, text),
         value: None,
       })
     });
-    methods.add_method_mut("text_edit_singleline", |lua, this, text: String| {
+    methods.add_method_mut("text_edit_singleline", |lua, this: &mut LuaUi, text: String| {
       let mut value = text;
       let res = this.ui.text_edit_singleline(&mut value);
 
@@ -344,7 +344,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "image",
-      |_lua, this, (source, options): (mlua::Value, Option<mlua::Table>)| {
+      |_lua, this: &mut LuaUi, (source, options): (mlua::Value, Option<mlua::Table>)| {
         let mut img = match source {
           mlua::Value::UserData(ud) => {
             if let Ok(bytes) = ud.borrow::<lulu::ops::LuluByteArray>() {
@@ -406,7 +406,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "combobox",
-      |lua, this, (label, mut selected_key, values, func): (String, String, HashMap<String, String>, Option<mlua::Function>)| {
+      |lua, this: &mut LuaUi, (label, mut selected_key, values, func): (String, String, HashMap<String, String>, Option<mlua::Function>)| {
         let selected_key_old = selected_key.clone();
 
         let mut keys: Vec<_> = values.keys().cloned().collect();
@@ -456,7 +456,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       },
     );
 
-    methods.add_method_mut("text_edit_multiline", |lua, this, text: String| {
+    methods.add_method_mut("text_edit_multiline", |lua, this: &mut LuaUi, text: String| {
       let mut value = text;
       let res = this.ui.text_edit_multiline(&mut value);
 
@@ -470,7 +470,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       Ok(lua_response)
     });
     
-    methods.add_method_mut("code_editor", |lua, this, text: String| {
+    methods.add_method_mut("code_editor", |lua, this: &mut LuaUi, text: String| {
       let mut value = text;
       let res = this.ui.code_editor(&mut value);
 
@@ -483,7 +483,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
       Ok(lua_response)
     });
-    methods.add_method_mut("checkbox", |_lua, this, (text, checked): (String, bool)| {
+    methods.add_method_mut("checkbox", |_lua, this: &mut LuaUi, (text, checked): (String, bool)| {
       let mut value = checked;
       let response = this.ui.checkbox(&mut value, text);
       Ok(LuaUiResponse {
@@ -493,7 +493,7 @@ impl<'ui> UserData for LuaUi<'ui> {
     });
     methods.add_method_mut(
       "slider",
-      |_lua, this, (text, min, max, value): (String, f32, f32, f32)| {
+      |_lua, this: &mut LuaUi, (text, min, max, value): (String, f32, f32, f32)| {
         let mut val = value;
         let response = this
           .ui
@@ -504,7 +504,7 @@ impl<'ui> UserData for LuaUi<'ui> {
         })
       },
     );
-    methods.add_method_mut("drag_value", |_lua, this, (text, value): (String, f64)| {
+    methods.add_method_mut("drag_value", |_lua, this: &mut LuaUi, (text, value): (String, f64)| {
       let mut val = value;
       let response = this.ui.add(egui::DragValue::new(&mut val).prefix(text));
       Ok(LuaUiResponse {
@@ -512,21 +512,21 @@ impl<'ui> UserData for LuaUi<'ui> {
         value: Some(mlua::Value::Number(val)),
       })
     });
-    methods.add_method_mut("hyperlink", |_lua, this, url: String| {
+    methods.add_method_mut("hyperlink", |_lua, this: &mut LuaUi, url: String| {
       ui_resp!(this.ui.hyperlink(url))
     });
-    methods.add_method_mut("hyperlink_to", |_lua, this, (text, url): (String, String)| {
+    methods.add_method_mut("hyperlink_to", |_lua, this: &mut LuaUi, (text, url): (String, String)| {
       ui_resp!(this.ui.hyperlink_to(text, url))
     });
-    methods.add_method_mut("link", |_lua, this, url: String| {
+    methods.add_method_mut("link", |_lua, this: &mut LuaUi, url: String| {
       ui_resp!(this.ui.link(url))
     });
-    methods.add_method_mut("code", |_lua, this, text: String| {
+    methods.add_method_mut("code", |_lua, this: &mut LuaUi, text: String| {
       ui_resp!(this.ui.code(text))
     });
     methods.add_method_mut(
       "radio_button",
-      |_lua, this, (text, current_value, my_value): (String, String, String)| {
+      |_lua, this: &mut LuaUi, (text, current_value, my_value): (String, String, String)| {
         let mut current = current_value;
         let response = this.ui.radio_value(&mut current, my_value.clone(), text);
         Ok(LuaUiResponse {
@@ -535,15 +535,15 @@ impl<'ui> UserData for LuaUi<'ui> {
         })
       },
     );
-    methods.add_method_mut("separator", |_lua, this, ()| ui_resp!(this.ui.separator()));
-    methods.add_method_mut("spinner", |_lua, this, ()| ui_resp!(this.ui.spinner()));
+    methods.add_method_mut("separator", |_lua, this: &mut LuaUi, ()| ui_resp!(this.ui.separator()));
+    methods.add_method_mut("spinner", |_lua, this: &mut LuaUi, ()| ui_resp!(this.ui.spinner()));
     methods.add_method_mut(
       "progress_bar",
-      |_lua, this, (fraction, text): (f32, String)| {
+      |_lua, this: &mut LuaUi, (fraction, text): (f32, String)| {
         ui_resp!(this.ui.add(egui::ProgressBar::new(fraction).text(text)))
       },
     );
-    methods.add_method_mut("horizontal", |lua, this, func: mlua::Function| {
+    methods.add_method_mut("horizontal", |lua, this: &mut LuaUi, func: mlua::Function| {
       this.ui.horizontal(|ui| {
         lua
           .scope(|_scope| {
@@ -559,7 +559,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       Ok(())
     });
 
-    methods.add_method_mut("vertical", |lua, this, func: mlua::Function| {
+    methods.add_method_mut("vertical", |lua, this: &mut LuaUi, func: mlua::Function| {
       this.ui.vertical(|ui| {
         lua
           .scope(|scope| {
@@ -575,7 +575,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       Ok(())
     });
 
-    methods.add_method_mut("horizontal_wrapped", |lua, this, func: mlua::Function| {
+    methods.add_method_mut("horizontal_wrapped", |lua, this: &mut LuaUi, func: mlua::Function| {
       this.ui.horizontal_wrapped(|ui| {
         lua
           .scope(|scope| {
@@ -591,7 +591,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       Ok(())
     });
 
-    methods.add_method_mut("vertical_centered", |lua, this, func: mlua::Function| {
+    methods.add_method_mut("vertical_centered", |lua, this: &mut LuaUi, func: mlua::Function| {
       this.ui.vertical_centered(|ui| {
         lua
           .scope(|scope| {
@@ -609,7 +609,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "vertical_centered_justified",
-      |lua, this, func: mlua::Function| {
+      |lua, this: &mut LuaUi, func: mlua::Function| {
         this.ui.vertical_centered_justified(|ui| {
           lua
             .scope(|scope| {
@@ -626,7 +626,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       },
     );
 
-    methods.add_method_mut("group", |lua, this, func: mlua::Function| {
+    methods.add_method_mut("group", |lua, this: &mut LuaUi, func: mlua::Function| {
       this.ui.group(|ui| {
         lua
           .scope(|scope| {
@@ -642,7 +642,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       Ok(())
     });
 
-    methods.add_method_mut("scroll_area", |lua, this, func: mlua::Function| {
+    methods.add_method_mut("scroll_area", |lua, this: &mut LuaUi, func: mlua::Function| {
       egui::ScrollArea::vertical().show(this.ui, |ui| {
         lua
           .scope(|scope| {
@@ -658,17 +658,17 @@ impl<'ui> UserData for LuaUi<'ui> {
       Ok(())
     });
 
-    methods.add_method_mut("set_width", |_, this, width: f32| {
+    methods.add_method_mut("set_width", |_, this: &mut LuaUi, width: f32| {
       this.ui.set_width(width);
       Ok(())
     });
 
-    methods.add_method_mut("set_height", |_, this, height: f32| {
+    methods.add_method_mut("set_height", |_, this: &mut LuaUi, height: f32| {
       this.ui.set_height(height);
       Ok(())
     });
 
-    methods.add_method_mut("scope", |lua, this, func: mlua::Function| {
+    methods.add_method_mut("scope", |lua, this: &mut LuaUi, func: mlua::Function| {
       this.ui.scope(|ui| {
         lua
           .scope(|scope| {
@@ -686,7 +686,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     // methods.add_method_mut(
     //   "popup_below_widget",
-    //   |lua, this, (id, func): (String, mlua::Function)| {
+    //   |lua, this: &mut LuaUi, (id, func): (String, mlua::Function)| {
     //     egui::popup_below_widget(
     //       this.ui,
     //       egui::Id::new(id),
@@ -710,7 +710,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "window",
-      |lua, this, (title, func): (String, mlua::Function)| {
+      |lua, this: &mut LuaUi, (title, func): (String, mlua::Function)| {
         egui::Window::new(title).show(this.ui.ctx(), |ui| {
           lua
             .scope(|scope| {
@@ -727,7 +727,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       },
     );
 
-    methods.add_method_mut("color_picker", |_lua, this, color_table: mlua::Table| {
+    methods.add_method_mut("color_picker", |_lua, this: &mut LuaUi, color_table: mlua::Table| {
       let mut color = color_from_lua_table(color_table).unwrap();
       let response = egui::widgets::color_picker::color_edit_button_srgba(
         this.ui,
@@ -747,7 +747,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "color_edit_button",
-      |_, this, (r, g, b): (f32, f32, f32)| {
+      |_, this: &mut LuaUi, (r, g, b): (f32, f32, f32)| {
         let mut color =
           egui::Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
         this.ui.color_edit_button_srgba(&mut color);
@@ -755,7 +755,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       },
     );
 
-    methods.add_method_mut("grid", |lua, this, (id, func): (String, mlua::Function)| {
+    methods.add_method_mut("grid", |lua, this: &mut LuaUi, (id, func): (String, mlua::Function)| {
       egui::Grid::new(id).show(this.ui, |ui| {
         lua
           .scope(|scope| {
@@ -773,7 +773,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "collapsing_header",
-      |lua, this, (label, func): (String, mlua::Function)| {
+      |lua, this: &mut LuaUi, (label, func): (String, mlua::Function)| {
         this.ui.collapsing(label, |ui| {
           lua
             .scope(|scope| {
@@ -790,7 +790,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       },
     );
 
-    // methods.add_method_mut("table", |lua, this, (id, func): (String, LuaFunction)| {
+    // methods.add_method_mut("table", |lua, this: &mut LuaUi, (id, func): (String, LuaFunction)| {
     //   let mut table = egui_extras::TableBuilder::new(this.ui)
     //     .striped(true)
     //     .resizable(true)
@@ -816,7 +816,7 @@ impl<'ui> UserData for LuaUi<'ui> {
     //   Ok(())
     // });
 
-    methods.add_method_mut("set_attribs", |_, this, style_table: mlua::Table| {
+    methods.add_method_mut("set_attribs", |_, this: &mut LuaUi, style_table: mlua::Table| {
       set_attrib!(("height", String), style_table, |val: String| {
         this.ui.set_height(get_size_attrib!(this.ui, val))
       });
@@ -833,7 +833,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "set_style",
-      |_, this, (style_table, context): (mlua::Table, bool)| {
+      |_, this: &mut LuaUi, (style_table, context): (mlua::Table, bool)| {
         let ctx = this.ui.ctx();
         let mut style = (*ctx.style()).clone();
 
@@ -1011,7 +1011,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       },
     );
 
-    methods.add_method_mut("set_spacing", |_, this, spacing: f32| {
+    methods.add_method_mut("set_spacing", |_, this: &mut LuaUi, spacing: f32| {
       let ctx = this.ui.ctx();
       let mut style = (*ctx.style()).clone();
 
@@ -1022,7 +1022,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "columns",
-      |lua, this, (n, func): (usize, mlua::Function)| {
+      |lua, this: &mut LuaUi, (n, func): (usize, mlua::Function)| {
         this.ui.columns(n, |columns| {
           for (i, column) in columns.iter_mut().enumerate() {
             let func = func.clone(); // clone here
@@ -1045,7 +1045,7 @@ impl<'ui> UserData for LuaUi<'ui> {
     // allocate_ui_with_layout
     methods.add_method_mut(
       "allocate_ui_with_layout",
-      |lua, this, (layout_name, func): (String, mlua::Function)| {
+      |lua, this: &mut LuaUi, (layout_name, func): (String, mlua::Function)| {
         let layout = match layout_name.as_str() {
           "left_to_right" => Layout::left_to_right(Align::Center),
           "right_to_left" => Layout::right_to_left(Align::Center),
@@ -1071,7 +1071,7 @@ impl<'ui> UserData for LuaUi<'ui> {
       },
     );
 
-    methods.add_method_mut("visuals_mut", |_, this, func: mlua::Function| {
+    methods.add_method_mut("visuals_mut", |_, this: &mut LuaUi, func: mlua::Function| {
       let visuals = LuaVisuals(this.ui.visuals_mut().clone());
       func.call::<()>(visuals)?;
       Ok(())
@@ -1080,7 +1080,7 @@ impl<'ui> UserData for LuaUi<'ui> {
     // menu_button
     methods.add_method_mut(
       "menu_button",
-      |lua, this, (label, func): (String, mlua::Function)| {
+      |lua, this: &mut LuaUi, (label, func): (String, mlua::Function)| {
         this.ui.menu_button(label, |ui| {
           lua
             .scope(|scope| {
@@ -1099,7 +1099,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "frame_block",
-      |lua, this, (style, func): (mlua::Table, mlua::Function)| {
+      |lua, this: &mut LuaUi, (style, func): (mlua::Table, mlua::Function)| {
         let mut frame = Frame::none();
 
         stylize_element!(frame, style);
@@ -1147,7 +1147,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "align",
-      |lua, this, (layout_name, align, func): (String, String, mlua::Function)| {
+      |lua, this: &mut LuaUi, (layout_name, align, func): (String, String, mlua::Function)| {
         let alignment = to_align(&align);
         let layout = match layout_name.as_str() {
           "left_to_right" => Layout::left_to_right(alignment),
@@ -1170,7 +1170,7 @@ impl<'ui> UserData for LuaUi<'ui> {
     );
 
     // context_menu
-    // methods.add_method_mut("context_menu", |lua, this, func: mlua::Function| {
+    // methods.add_method_mut("context_menu", |lua, this: &mut LuaUi, func: mlua::Function| {
     //   this.ui.context_menu(|ui| {
     //     let lua_ui = LuaUi { ui };
     //     func.call::<()>(lua_ui).unwrap();
@@ -1180,7 +1180,7 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "place_ui_at",
-      |lua, this, (x, y, w, h, func): (f32, f32, f32, f32, mlua::Function)| {
+      |lua, this: &mut LuaUi, (x, y, w, h, func): (f32, f32, f32, f32, mlua::Function)| {
         let rect = Rect::from_min_size(egui::pos2(x, y), Vec2::new(w, h));
         this.ui.allocate_ui(rect.size(), |ui| {
           ui.set_clip_rect(rect); // optional
@@ -1200,7 +1200,7 @@ impl<'ui> UserData for LuaUi<'ui> {
     );
 
     // clip_rect
-    methods.add_method_mut("clip_rect", |_, this, ()| {
+    methods.add_method_mut("clip_rect", |_, this: &mut LuaUi, ()| {
       let rect = this.ui.clip_rect();
       Ok((rect.min.x, rect.min.y, rect.max.x, rect.max.y))
     });
@@ -1330,7 +1330,8 @@ async fn load_main(lulu: &mut Lulu) -> Result<mlua::Value, String> {
 
   let main_name = lulu.find_mod("main").map_err(|e| e.to_string())?;
 
-  let ui_code = include_str!("lua/ui.lua");
+  let ui_code = std::fs::read_to_string("src/lua/ui.lua").map_err(|e| e.to_string())?;
+  // let ui_code = include_str!("lua/ui.lua");
   let f = lulu
     .lua
     .load(lulu.compiler.compile(&ui_code, None, None))
