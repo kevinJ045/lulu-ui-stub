@@ -1,7 +1,7 @@
 use eframe::egui::*;
 use eframe::egui::{self, ahash::HashMap};
-use lulu::lulu::Lulu;
-use mlua::{UserData, UserDataMethods};
+use lulu::lulu::{Lulu, LuluModSource};
+use mlua::{LuaSerdeExt, UserData, UserDataMethods};
 
 fn color_from_lua_table(table: mlua::Table) -> Option<Color32> {
   let r: f32 = table.get(1).ok()?;
@@ -233,7 +233,7 @@ impl UserData for LuaUiResponse {
     fields.add_field_method_get("hovered", |_, this| Ok(this.res.hovered()));
     fields.add_field_method_get("changed", |_, this| {
       if let Some(mlua::Value::Table(v)) = this.value.clone() {
-        if let Ok(r) = v.get::<bool>("changed"){
+        if let Ok(r) = v.get::<bool>("changed") {
           Ok(r)
         } else {
           Ok(this.res.changed())
@@ -280,12 +280,17 @@ impl<'ui> UserData for LuaUi<'ui> {
         Ok(LuaUiResponse { res, value: None })
       },
     );
-    methods.add_method_mut("colored_label", |_lua, this: &mut LuaUi, (text, color): (String, mlua::Table)| {
-      Ok(LuaUiResponse {
-        res: this.ui.colored_label(color_from_lua_table(color).unwrap(), text),
-        value: None,
-      })
-    });
+    methods.add_method_mut(
+      "colored_label",
+      |_lua, this: &mut LuaUi, (text, color): (String, mlua::Table)| {
+        Ok(LuaUiResponse {
+          res: this
+            .ui
+            .colored_label(color_from_lua_table(color).unwrap(), text),
+          value: None,
+        })
+      },
+    );
     methods.add_method_mut("label", |_lua, this: &mut LuaUi, text: String| {
       Ok(LuaUiResponse {
         res: this.ui.label(text),
@@ -322,25 +327,31 @@ impl<'ui> UserData for LuaUi<'ui> {
         value: None,
       })
     });
-    methods.add_method_mut("selectable_value", |_lua, this: &mut LuaUi, (mut current, selected, text): (String, String, String)| {
-      Ok(LuaUiResponse {
-        res: this.ui.selectable_value(&mut current, selected, text),
-        value: None,
-      })
-    });
-    methods.add_method_mut("text_edit_singleline", |lua, this: &mut LuaUi, text: String| {
-      let mut value = text;
-      let res = this.ui.text_edit_singleline(&mut value);
+    methods.add_method_mut(
+      "selectable_value",
+      |_lua, this: &mut LuaUi, (mut current, selected, text): (String, String, String)| {
+        Ok(LuaUiResponse {
+          res: this.ui.selectable_value(&mut current, selected, text),
+          value: None,
+        })
+      },
+    );
+    methods.add_method_mut(
+      "text_edit_singleline",
+      |lua, this: &mut LuaUi, text: String| {
+        let mut value = text;
+        let res = this.ui.text_edit_singleline(&mut value);
 
-      let lua_value = lua.create_string(&value)?;
+        let lua_value = lua.create_string(&value)?;
 
-      let lua_response = lua.create_userdata(LuaUiResponse {
-        res,
-        value: Some(mlua::Value::String(lua_value)),
-      })?;
+        let lua_response = lua.create_userdata(LuaUiResponse {
+          res,
+          value: Some(mlua::Value::String(lua_value)),
+        })?;
 
-      Ok(lua_response)
-    });
+        Ok(lua_response)
+      },
+    );
 
     methods.add_method_mut(
       "image",
@@ -406,12 +417,19 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "combobox",
-      |lua, this: &mut LuaUi, (label, mut selected_key, values, func): (String, String, HashMap<String, String>, Option<mlua::Function>)| {
+      |lua,
+       this: &mut LuaUi,
+       (label, mut selected_key, values, func): (
+        String,
+        String,
+        HashMap<String, String>,
+        Option<mlua::Function>,
+      )| {
         let selected_key_old = selected_key.clone();
 
         let mut keys: Vec<_> = values.keys().cloned().collect();
         keys.sort();
-        
+
         let res = egui::ComboBox::from_label(label)
           .selected_text(values.get(&selected_key).unwrap_or(&selected_key))
           .show_ui(this.ui, |ui| {
@@ -423,7 +441,14 @@ impl<'ui> UserData for LuaUi<'ui> {
                   .scope(|_scope| {
                     let lua_ui = _scope.create_userdata(LuaUi { ui }).unwrap();
                     let temp_func = _scope
-                      .create_function(move |_lua, selected_key_old: String| func.call::<Option<String>>((lua_ui.clone(), selected_key_old, key.clone(), value.clone())))
+                      .create_function(move |_lua, selected_key_old: String| {
+                        func.call::<Option<String>>((
+                          lua_ui.clone(),
+                          selected_key_old,
+                          key.clone(),
+                          value.clone(),
+                        ))
+                      })
                       .unwrap();
                     temp_func.call::<Option<String>>(selected_key_old)
                   })
@@ -447,29 +472,29 @@ impl<'ui> UserData for LuaUi<'ui> {
           None
         };
 
+        let lua_response = lua.create_userdata(LuaUiResponse { res, value })?;
+
+        Ok(lua_response)
+      },
+    );
+
+    methods.add_method_mut(
+      "text_edit_multiline",
+      |lua, this: &mut LuaUi, text: String| {
+        let mut value = text;
+        let res = this.ui.text_edit_multiline(&mut value);
+
+        let lua_value = lua.create_string(&value)?;
+
         let lua_response = lua.create_userdata(LuaUiResponse {
           res,
-          value,
+          value: Some(mlua::Value::String(lua_value)),
         })?;
 
         Ok(lua_response)
       },
     );
 
-    methods.add_method_mut("text_edit_multiline", |lua, this: &mut LuaUi, text: String| {
-      let mut value = text;
-      let res = this.ui.text_edit_multiline(&mut value);
-
-      let lua_value = lua.create_string(&value)?;
-
-      let lua_response = lua.create_userdata(LuaUiResponse {
-        res,
-        value: Some(mlua::Value::String(lua_value)),
-      })?;
-
-      Ok(lua_response)
-    });
-    
     methods.add_method_mut("code_editor", |lua, this: &mut LuaUi, text: String| {
       let mut value = text;
       let res = this.ui.code_editor(&mut value);
@@ -483,14 +508,17 @@ impl<'ui> UserData for LuaUi<'ui> {
 
       Ok(lua_response)
     });
-    methods.add_method_mut("checkbox", |_lua, this: &mut LuaUi, (text, checked): (String, bool)| {
-      let mut value = checked;
-      let response = this.ui.checkbox(&mut value, text);
-      Ok(LuaUiResponse {
-        res: response,
-        value: Some(mlua::Value::Boolean(value)),
-      })
-    });
+    methods.add_method_mut(
+      "checkbox",
+      |_lua, this: &mut LuaUi, (text, checked): (String, bool)| {
+        let mut value = checked;
+        let response = this.ui.checkbox(&mut value, text);
+        Ok(LuaUiResponse {
+          res: response,
+          value: Some(mlua::Value::Boolean(value)),
+        })
+      },
+    );
     methods.add_method_mut(
       "slider",
       |_lua, this: &mut LuaUi, (text, min, max, value): (String, f32, f32, f32)| {
@@ -504,20 +532,26 @@ impl<'ui> UserData for LuaUi<'ui> {
         })
       },
     );
-    methods.add_method_mut("drag_value", |_lua, this: &mut LuaUi, (text, value): (String, f64)| {
-      let mut val = value;
-      let response = this.ui.add(egui::DragValue::new(&mut val).prefix(text));
-      Ok(LuaUiResponse {
-        res: response,
-        value: Some(mlua::Value::Number(val)),
-      })
-    });
+    methods.add_method_mut(
+      "drag_value",
+      |_lua, this: &mut LuaUi, (text, value): (String, f64)| {
+        let mut val = value;
+        let response = this.ui.add(egui::DragValue::new(&mut val).prefix(text));
+        Ok(LuaUiResponse {
+          res: response,
+          value: Some(mlua::Value::Number(val)),
+        })
+      },
+    );
     methods.add_method_mut("hyperlink", |_lua, this: &mut LuaUi, url: String| {
       ui_resp!(this.ui.hyperlink(url))
     });
-    methods.add_method_mut("hyperlink_to", |_lua, this: &mut LuaUi, (text, url): (String, String)| {
-      ui_resp!(this.ui.hyperlink_to(text, url))
-    });
+    methods.add_method_mut(
+      "hyperlink_to",
+      |_lua, this: &mut LuaUi, (text, url): (String, String)| {
+        ui_resp!(this.ui.hyperlink_to(text, url))
+      },
+    );
     methods.add_method_mut("link", |_lua, this: &mut LuaUi, url: String| {
       ui_resp!(this.ui.link(url))
     });
@@ -535,29 +569,36 @@ impl<'ui> UserData for LuaUi<'ui> {
         })
       },
     );
-    methods.add_method_mut("separator", |_lua, this: &mut LuaUi, ()| ui_resp!(this.ui.separator()));
-    methods.add_method_mut("spinner", |_lua, this: &mut LuaUi, ()| ui_resp!(this.ui.spinner()));
+    methods.add_method_mut("separator", |_lua, this: &mut LuaUi, ()| {
+      ui_resp!(this.ui.separator())
+    });
+    methods.add_method_mut("spinner", |_lua, this: &mut LuaUi, ()| {
+      ui_resp!(this.ui.spinner())
+    });
     methods.add_method_mut(
       "progress_bar",
       |_lua, this: &mut LuaUi, (fraction, text): (f32, String)| {
         ui_resp!(this.ui.add(egui::ProgressBar::new(fraction).text(text)))
       },
     );
-    methods.add_method_mut("horizontal", |lua, this: &mut LuaUi, func: mlua::Function| {
-      this.ui.horizontal(|ui| {
-        lua
-          .scope(|_scope| {
-            let lua_ui = _scope.create_userdata(LuaUi { ui }).unwrap();
-            let temp_func = _scope
-              .create_function(move |_lua, ()| func.call::<()>(lua_ui.clone()))
-              .unwrap();
-            temp_func.call::<()>(()).unwrap();
-            Ok(())
-          })
-          .unwrap();
-      });
-      Ok(())
-    });
+    methods.add_method_mut(
+      "horizontal",
+      |lua, this: &mut LuaUi, func: mlua::Function| {
+        this.ui.horizontal(|ui| {
+          lua
+            .scope(|_scope| {
+              let lua_ui = _scope.create_userdata(LuaUi { ui }).unwrap();
+              let temp_func = _scope
+                .create_function(move |_lua, ()| func.call::<()>(lua_ui.clone()))
+                .unwrap();
+              temp_func.call::<()>(()).unwrap();
+              Ok(())
+            })
+            .unwrap();
+        });
+        Ok(())
+      },
+    );
 
     methods.add_method_mut("vertical", |lua, this: &mut LuaUi, func: mlua::Function| {
       this.ui.vertical(|ui| {
@@ -575,37 +616,43 @@ impl<'ui> UserData for LuaUi<'ui> {
       Ok(())
     });
 
-    methods.add_method_mut("horizontal_wrapped", |lua, this: &mut LuaUi, func: mlua::Function| {
-      this.ui.horizontal_wrapped(|ui| {
-        lua
-          .scope(|scope| {
-            let lua_ui = scope.create_userdata(LuaUi { ui }).unwrap();
-            let temp_func = scope
-              .create_function(move |_lua, ()| func.call::<()>(lua_ui.clone()))
-              .unwrap();
-            temp_func.call::<()>(()).unwrap();
-            Ok(())
-          })
-          .unwrap();
-      });
-      Ok(())
-    });
+    methods.add_method_mut(
+      "horizontal_wrapped",
+      |lua, this: &mut LuaUi, func: mlua::Function| {
+        this.ui.horizontal_wrapped(|ui| {
+          lua
+            .scope(|scope| {
+              let lua_ui = scope.create_userdata(LuaUi { ui }).unwrap();
+              let temp_func = scope
+                .create_function(move |_lua, ()| func.call::<()>(lua_ui.clone()))
+                .unwrap();
+              temp_func.call::<()>(()).unwrap();
+              Ok(())
+            })
+            .unwrap();
+        });
+        Ok(())
+      },
+    );
 
-    methods.add_method_mut("vertical_centered", |lua, this: &mut LuaUi, func: mlua::Function| {
-      this.ui.vertical_centered(|ui| {
-        lua
-          .scope(|scope| {
-            let lua_ui = scope.create_userdata(LuaUi { ui }).unwrap();
-            let temp_func = scope
-              .create_function(move |_lua, ()| func.call::<()>(lua_ui.clone()))
-              .unwrap();
-            temp_func.call::<()>(()).unwrap();
-            Ok(())
-          })
-          .unwrap();
-      });
-      Ok(())
-    });
+    methods.add_method_mut(
+      "vertical_centered",
+      |lua, this: &mut LuaUi, func: mlua::Function| {
+        this.ui.vertical_centered(|ui| {
+          lua
+            .scope(|scope| {
+              let lua_ui = scope.create_userdata(LuaUi { ui }).unwrap();
+              let temp_func = scope
+                .create_function(move |_lua, ()| func.call::<()>(lua_ui.clone()))
+                .unwrap();
+              temp_func.call::<()>(()).unwrap();
+              Ok(())
+            })
+            .unwrap();
+        });
+        Ok(())
+      },
+    );
 
     methods.add_method_mut(
       "vertical_centered_justified",
@@ -642,21 +689,24 @@ impl<'ui> UserData for LuaUi<'ui> {
       Ok(())
     });
 
-    methods.add_method_mut("scroll_area", |lua, this: &mut LuaUi, func: mlua::Function| {
-      egui::ScrollArea::vertical().show(this.ui, |ui| {
-        lua
-          .scope(|scope| {
-            let lua_ui = scope.create_userdata(LuaUi { ui }).unwrap();
-            let temp_func = scope
-              .create_function(move |_lua, ()| func.call::<()>(lua_ui.clone()))
-              .unwrap();
-            temp_func.call::<()>(()).unwrap();
-            Ok(())
-          })
-          .unwrap();
-      });
-      Ok(())
-    });
+    methods.add_method_mut(
+      "scroll_area",
+      |lua, this: &mut LuaUi, func: mlua::Function| {
+        egui::ScrollArea::vertical().show(this.ui, |ui| {
+          lua
+            .scope(|scope| {
+              let lua_ui = scope.create_userdata(LuaUi { ui }).unwrap();
+              let temp_func = scope
+                .create_function(move |_lua, ()| func.call::<()>(lua_ui.clone()))
+                .unwrap();
+              temp_func.call::<()>(()).unwrap();
+              Ok(())
+            })
+            .unwrap();
+        });
+        Ok(())
+      },
+    );
 
     methods.add_method_mut("set_width", |_, this: &mut LuaUi, width: f32| {
       this.ui.set_width(width);
@@ -727,23 +777,26 @@ impl<'ui> UserData for LuaUi<'ui> {
       },
     );
 
-    methods.add_method_mut("color_picker", |_lua, this: &mut LuaUi, color_table: mlua::Table| {
-      let mut color = color_from_lua_table(color_table).unwrap();
-      let response = egui::widgets::color_picker::color_edit_button_srgba(
-        this.ui,
-        &mut color,
-        egui::color_picker::Alpha::Opaque,
-      );
-      Ok(LuaUiResponse {
-        res: response,
-        value: Some(mlua::Value::Table(_lua.create_table_from([
-          (1, color.r()),
-          (2, color.g()),
-          (3, color.b()),
-          (4, color.a()),
-        ])?)),
-      })
-    });
+    methods.add_method_mut(
+      "color_picker",
+      |_lua, this: &mut LuaUi, color_table: mlua::Table| {
+        let mut color = color_from_lua_table(color_table).unwrap();
+        let response = egui::widgets::color_picker::color_edit_button_srgba(
+          this.ui,
+          &mut color,
+          egui::color_picker::Alpha::Opaque,
+        );
+        Ok(LuaUiResponse {
+          res: response,
+          value: Some(mlua::Value::Table(_lua.create_table_from([
+            (1, color.r()),
+            (2, color.g()),
+            (3, color.b()),
+            (4, color.a()),
+          ])?)),
+        })
+      },
+    );
 
     methods.add_method_mut(
       "color_edit_button",
@@ -755,21 +808,24 @@ impl<'ui> UserData for LuaUi<'ui> {
       },
     );
 
-    methods.add_method_mut("grid", |lua, this: &mut LuaUi, (id, func): (String, mlua::Function)| {
-      egui::Grid::new(id).show(this.ui, |ui| {
-        lua
-          .scope(|scope| {
-            let lua_ui = scope.create_userdata(LuaUi { ui }).unwrap();
-            let temp_func = scope
-              .create_function(move |_lua, ()| func.call::<()>(lua_ui.clone()))
-              .unwrap();
-            temp_func.call::<()>(()).unwrap();
-            Ok(())
-          })
-          .unwrap();
-      });
-      Ok(())
-    });
+    methods.add_method_mut(
+      "grid",
+      |lua, this: &mut LuaUi, (id, func): (String, mlua::Function)| {
+        egui::Grid::new(id).show(this.ui, |ui| {
+          lua
+            .scope(|scope| {
+              let lua_ui = scope.create_userdata(LuaUi { ui }).unwrap();
+              let temp_func = scope
+                .create_function(move |_lua, ()| func.call::<()>(lua_ui.clone()))
+                .unwrap();
+              temp_func.call::<()>(()).unwrap();
+              Ok(())
+            })
+            .unwrap();
+        });
+        Ok(())
+      },
+    );
 
     methods.add_method_mut(
       "collapsing_header",
@@ -816,20 +872,23 @@ impl<'ui> UserData for LuaUi<'ui> {
     //   Ok(())
     // });
 
-    methods.add_method_mut("set_attribs", |_, this: &mut LuaUi, style_table: mlua::Table| {
-      set_attrib!(("height", String), style_table, |val: String| {
-        this.ui.set_height(get_size_attrib!(this.ui, val))
-      });
-      set_attrib!(("width", String), style_table, |val: String| {
-        this.ui.set_width(get_size_attrib!(this.ui, val))
-      });
+    methods.add_method_mut(
+      "set_attribs",
+      |_, this: &mut LuaUi, style_table: mlua::Table| {
+        set_attrib!(("height", String), style_table, |val: String| {
+          this.ui.set_height(get_size_attrib!(this.ui, val))
+        });
+        set_attrib!(("width", String), style_table, |val: String| {
+          this.ui.set_width(get_size_attrib!(this.ui, val))
+        });
 
-      set_attrib!(("visible", bool), style_table, |val: bool| {
-        this.ui.set_visible(val);
-      });
+        set_attrib!(("visible", bool), style_table, |val: bool| {
+          this.ui.set_visible(val);
+        });
 
-      Ok(())
-    });
+        Ok(())
+      },
+    );
 
     methods.add_method_mut(
       "set_style",
@@ -1071,11 +1130,14 @@ impl<'ui> UserData for LuaUi<'ui> {
       },
     );
 
-    methods.add_method_mut("visuals_mut", |_, this: &mut LuaUi, func: mlua::Function| {
-      let visuals = LuaVisuals(this.ui.visuals_mut().clone());
-      func.call::<()>(visuals)?;
-      Ok(())
-    });
+    methods.add_method_mut(
+      "visuals_mut",
+      |_, this: &mut LuaUi, func: mlua::Function| {
+        let visuals = LuaVisuals(this.ui.visuals_mut().clone());
+        func.call::<()>(visuals)?;
+        Ok(())
+      },
+    );
 
     // menu_button
     methods.add_method_mut(
@@ -1279,6 +1341,17 @@ impl eframe::App for LuluUiApp {
   fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
     // Changed frame back to _frame
     self.lulu.lua.set_app_data(ctx.clone());
+    match self
+      .lulu
+      .lua
+      .globals()
+      .set("cpu_usage", _frame.info().cpu_usage.unwrap_or(0.0))
+    {
+      Err(err) => {
+        self.init_error = Some(err.to_string());
+      }
+      Ok(_) => {}
+    }
 
     if let Some(err) = &self.init_error {
       egui::CentralPanel::default().show(ctx, |ui| {
@@ -1359,10 +1432,29 @@ pub async fn run(lulu: &mut Lulu) -> Result<(), eframe::Error> {
     }
   };
 
+  let title = if let Ok(modname) = lulu.find_mod("ui-title") {
+    match lulu
+      .mods
+      .iter()
+      .find(|m| m.name == modname)
+    {
+      Some(m) => match m.source.clone() {
+        LuluModSource::Bytecode(bytes) => String::from_utf8(bytes).unwrap(),
+        LuluModSource::Code(_) => match lulu.exec_mod(&modname) {
+          Ok(value) => lulu.lua.from_value::<String>(value).unwrap(),
+          Err(_) => "Lulu UI".to_string(),
+        }
+      },
+      _ => "Lulu UI".to_string(),
+    }
+  } else {
+    "Lulu UI".to_string()
+  };
+
   let lulu = lulu.clone();
 
   eframe::run_native(
-    "Lulu UI",
+    &title,
     options,
     Box::new(|cc| {
       let mut fonts = egui::FontDefinitions::default();

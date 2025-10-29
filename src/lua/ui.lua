@@ -651,9 +651,9 @@ function RenderComponent(comp)
   return g
 end
 
-function UIOverride(name)
+function UIOverride(name, fn)
   return function(_class)
-    _class[name] = function() end
+    _class[name] = fn or function() end
     return _class
   end
 end
