@@ -16,6 +16,16 @@ class! @into_collectible("collect") State(@default_to("") value), {
       return str:gsub("{}", e):gsub("{{}}", "{}")
     end)
   }
+  
+  bool(tstr, fstr){
+    return self:map(function(e)
+      if e then
+        return tstr
+      else
+        return fstr
+      end
+    end)
+  }
 
   inverse(){
     return self:map(function(e)
@@ -71,6 +81,24 @@ class! @into_collectible("collect") State(@default_to("") value), {
     return self
   }
 
+  toggle(){
+    self:set(not self.value)
+    return self
+  }
+
+  toggle_as(bool, case1, case2){
+    local is_true = bool
+    if instanceof(bool, State) then
+      is_true = bool:get()
+    end
+    if is_true then
+      self:set(case1)
+    else
+      self:set(case2)
+    end
+    return self
+  }
+
   key(key, val){
     self.value[key] = val
     if self.on_set then
@@ -106,6 +134,12 @@ class! @into_collectible("collect") State(@default_to("") value), {
     if type(self.value) == "number" then
       self:set(self.value - val)
     end
+    return self
+  }
+
+  reemit(){
+    self.on_set(self.value)
+    return self
   }
 }
 

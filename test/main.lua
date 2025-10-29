@@ -1,10 +1,19 @@
 
 () @namespace(ui) =>
 
+  local LIGHT_COLORS, DARK_COLORS = {c"#ffffff", c"#fdfdfd"}, { c"#1e1e2e", c"#181825" }
 
-  local (self) @AutoRender @Component AppRoot =>
+  local (self) @AutoRender @StatedComponent({
+    colors = { c"#1e1e2e", c"#181825" },
+    accent = c"#cba6f7",
+    selected_accent = "mauve",
+    is_dark = true
+  }) @ComponentValues({
+    accents = { mauve = c"#cba6f7", red = c"#f38ba8", sky = c"#89dceb", rosewater = c"#f5e0dc" },
+    selectables = { mauve = "Mauve", red = "Red", sky = "Sky", rosewater = "Rosewater" }
+  }) @UIOverride('rebuild') @Component AppRoot =>
     return Style {
-      style = {
+      style = self.colors:map((col) => return {
         spacing = {
           button_padding = { 15, 5 },
         },
@@ -12,38 +21,44 @@
           heading_size = 32.0
         },
         visuals = {
-          panel_fill = c"#1e1e2e",
+          panel_fill = col[1],
+          noninteractive = {
+            bg_fill = col[2],
+            weak_bg_fill = col[2],
+          },
           inactive = {
-            bg_fill = c"#181825",
-            weak_bg_fill = c"#181825",
+            bg_fill = col[2],
+            weak_bg_fill = col[2],
             rounding = { 20, 20, 20, 20 }
           },
           active = {
-            bg_fill = c"#cba6f7",
-            weak_bg_fill = c"#cba6f7",
+            bg_fill = self.selected_accent:inside(self.accents):get(),
+            weak_bg_fill = self.selected_accent:inside(self.accents):get(),
             rounding = { 20, 20, 20, 20 }
           },
           open = {
+            bg_fill = col[1],
+            weak_bg_fill = col[1],
             fg_stroke = {
               width = 1.0,
               color = c"#cdd6f4"
             },
           },
           hovered = {
-            bg_fill = c"#cba6f7",
-            weak_bg_fill = c"#cba6f7",
+            bg_fill = self.selected_accent:inside(self.accents):get(),
+            weak_bg_fill = self.selected_accent:inside(self.accents):get(),
             bg_stroke = {
               width = 1.0,
-              color = c"#181825"
+              color = col[2]
             },
             fg_stroke = {
               width = 1.0,
-              color = c"#181825"
+              color = col[2]
             },
             rounding = { 20, 20, 20, 20 }
           }
         }
-      },
+      } end),
       child = Align {
         layout = "center_both",
         child = Frame {
@@ -67,8 +82,24 @@
                   text = txt_col! "#cdd6f4", "A custom styled full component example";,
                 },
                 Button {
-                  text = "hello"
+                  text = self.is_dark:bool("Light Theme", "Dark Theme"),
+                  on_clicked = function()
+                    self.colors:toggle_as(
+                      self.is_dark,
+                      LIGHT_COLORS,
+                      DARK_COLORS
+                    )
+                    self.is_dark:toggle()
+                  end
                 },
+                Combobox {
+                  selected = self.selected_accent,
+                  values = self.selectables,
+                  label = "Select Accent Color",
+                  on_changed = function()
+                    self.colors:reemit()
+                  end
+                }
               }
             }
           }
