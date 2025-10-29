@@ -11,3 +11,5 @@ eframe = { version = "0.27.2", default-features = false, features = ["x11", "glo
 crossbeam-channel = "0.5"
 reqwest = { version = "0.12.23", default-features = false, features = ["blocking", "rustls-tls"] }
 egui_extras = { version = "0.27.2", features = ["all_loaders"] }
+bevy = { version = "0.13", features = ["dynamic_linking"] }
+bevy_egui = "0.27"

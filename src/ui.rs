@@ -1341,6 +1341,18 @@ impl UserData for LuaPainter {
         Ok(())
       },
     );
+    
+    // methods.add_method_mut(
+    //   "image",
+    //   |_,
+    //    this: &mut LuaPainter,
+    //    (): ()| {
+    //     this
+    //       .painter
+    //       .image(rect, 0.0, Stroke::new(width, color));
+    //     Ok(())
+    //   },
+    // );
 
     methods.add_method_mut(
       "update",

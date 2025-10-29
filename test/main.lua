@@ -1,20 +1,50 @@
 
 () @namespace(ui) =>
 
+  local (self, props) @Component AddButton =>
+    return Button {
+      text = f"Add",
+      on_clicked = function()
+        props.clicked:add(1)
+      end
+    }
+  end
 
-  local (self) @AutoRender @Component AppRoot =>
+  local (self, props) @Component SubButton =>
+    return Button {
+      text = f"Subtract",
+      on_clicked = function()
+        props.clicked:sub(1)
+      end
+    }
+  end
+
+  local (self) @AutoRender @StatedComponent({
+    clicked = 0
+  }) @Component AppRoot =>
     return VBox {
       children = {
-        Painter {
-          pos = { x = 10, y = 10 },
-          render = function(painter)
-            painter:rect_filled(pos.x, pos.y, 100, 50, {0, 1, 0, 1}) -- green
-            painter:circle_filled(150, 35, 25, {1, 0, 0, 1}) -- red
-          end,
+        {
+          match! self.clicked:get(), {
+            (val > 10) {
+              return ColoredLabel {
+                text = "Too much",
+                color = { 255, 255, 255, 255 }
+              }
+            }
+          }
+        },
+        Label {
+          text = f"Clicked: {self.clicked:get()}"
+        },
+        HBox {
+          children = {
+            AddButton { clicked = self.clicked },
+            SubButton { clicked = self.clicked },
+          }
         }
       }
     }
   end
-
 
 end
