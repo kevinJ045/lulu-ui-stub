@@ -141,6 +141,30 @@ class! @into_collectible("collect") State(@default_to("") value), {
     self.on_set(self.value)
     return self
   }
+
+  is_empty(){
+    return self:map(function(v)
+      if instanceof(v, Vec) then
+        return v:len() < 1
+      elseif type(v) == "table" then
+        return #v < 1
+      else
+        return true
+      end
+    end)
+  }
+
+  has_items(){
+    return self:map(function(v)
+      if instanceof(v, Vec) then
+        return v:len() > 0
+      elseif type(v) == "table" then
+        return #v > 0
+      else
+        return false
+      end
+    end)
+  }
 }
 
 function remove_node_from(children, node)
@@ -335,7 +359,7 @@ local function handle_style(self, ui)
   end
 end
 
-local function register_element(name, options_default, render)
+local function register_element(name, options_default, render, init)
   local class! @widget_defaults(options_default) _c:Widget, (options) {
     if options.props and options.props.child then
       options.props.children = { options.props.child }
@@ -346,6 +370,10 @@ local function register_element(name, options_default, render)
       render(self, ui)
     }
   }
+
+  if type(init) == "function" then
+    init(_c)
+  end
 
   default_elements[name] = function(props, children)
     return _c collect! {
@@ -609,6 +637,42 @@ ui.Each = register_element("each", { items = {}, render = function(ui) end }, fu
     for k, v in ipairs(items) do
       render_item(v, k, items)
     end
+  end
+end)
+
+
+ui.VList = register_element("vlist", { items = {}, render = function() end }, function(self, ui)
+  if not self._init then
+    self:rerender(self.props.items)
+    self._init = true
+  end
+  render_from(self.children, ui)
+end, function(VList)
+
+  function VList:init()
+    if not instanceof(self.props.__real.items, State) then
+      local items = self.props.__real.items
+      if not instanceof(items, Vec) then
+        items = Vec(items)
+      end
+      self.props.__real.items = State(items)
+    end
+
+    if type(self.props.render) ~= "function" then
+      self.props.render = function() end
+    end
+
+    self.props.__real.items:map(function(i)
+      self:rerender(i)
+    end)
+
+    self._init = false
+  end
+
+  function VList:rerender(items)
+    self.children = items:map(function(item, index, array)
+      return self.props.render(item, index, array)
+    end)
   end
 end)
 
