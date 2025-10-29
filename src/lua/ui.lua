@@ -534,6 +534,13 @@ ui.Handle = register_element("handle", { render = function(ui) end }, function(s
   self.props.render(ui)
 end)
 
+ui.Painter = register_element("painter", { render = function(ui) end }, function(self, ui)
+  local painter = ui:painter()
+  local renderfn = self.props.render
+  setfenv(renderfn, self.props)
+  renderfn(painter, ui)
+end)
+
 ui.Each = register_element("each", { items = {}, render = function(ui) end }, function(self, ui)
   local items = get_prop_val(self.props.items)
 

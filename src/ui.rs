@@ -1,9 +1,10 @@
+use crate::shape::{self, LuaShape, from_lua_table};
 use eframe::egui::*;
-use eframe::egui::{self, ahash::HashMap};
+use eframe::egui::{self, Align2, FontId, ahash::HashMap};
 use lulu::lulu::{Lulu, LuluModSource};
 use mlua::{LuaSerdeExt, UserData, UserDataMethods};
 
-fn color_from_lua_table(table: mlua::Table) -> Option<Color32> {
+pub fn color_from_lua_table(table: mlua::Table) -> Option<Color32> {
   let r: f32 = table.get(1).ok()?;
   let g: f32 = table.get(2).ok()?;
   let b: f32 = table.get(3).ok()?;
@@ -1266,6 +1267,170 @@ impl<'ui> UserData for LuaUi<'ui> {
       let rect = this.ui.clip_rect();
       Ok((rect.min.x, rect.min.y, rect.max.x, rect.max.y))
     });
+
+    methods.add_method_mut("painter", |_, this: &mut LuaUi, ()| {
+      let painter = this.ui.painter().clone();
+      Ok(LuaPainter { painter })
+    });
+  }
+}
+
+#[derive(Clone)]
+struct LuaPainter {
+  painter: Painter,
+}
+
+impl UserData for LuaPainter {
+  fn add_methods<'lua, M: UserDataMethods<Self>>(methods: &mut M) {
+    methods.add_method_mut(
+      "rect_filled",
+      |_, this: &mut LuaPainter, (x, y, w, h, color): (f32, f32, f32, f32, mlua::Table)| {
+        let rect = Rect::from_min_size(egui::pos2(x, y), Vec2::new(w, h));
+        let color = color_from_lua_table(color).unwrap();
+        this.painter.rect_filled(rect, 0.0, color);
+        Ok(())
+      },
+    );
+
+    methods.add_method_mut(
+      "circle_filled",
+      |_, this: &mut LuaPainter, (x, y, radius, color): (f32, f32, f32, mlua::Table)| {
+        let center = egui::pos2(x, y);
+        let color = color_from_lua_table(color).unwrap();
+        this.painter.circle_filled(center, radius, color);
+        Ok(())
+      },
+    );
+
+    methods.add_method_mut(
+      "line_segment",
+      |_,
+       this: &mut LuaPainter,
+       (x1, y1, x2, y2, color, width): (f32, f32, f32, f32, mlua::Table, f32)| {
+        let points = [egui::pos2(x1, y1), egui::pos2(x2, y2)];
+        let color = color_from_lua_table(color).unwrap();
+        this.painter.line_segment(points, Stroke::new(width, color));
+        Ok(())
+      },
+    );
+
+    methods.add_method_mut(
+      "circle_stroke",
+      |_,
+       this: &mut LuaPainter,
+       (x, y, radius, color, width): (f32, f32, f32, mlua::Table, f32)| {
+        let center = egui::pos2(x, y);
+        let color = color_from_lua_table(color).unwrap();
+        this
+          .painter
+          .circle_stroke(center, radius, Stroke::new(width, color));
+        Ok(())
+      },
+    );
+
+    methods.add_method_mut(
+      "rect_stroke",
+      |_,
+       this: &mut LuaPainter,
+       (x, y, w, h, color, width): (f32, f32, f32, f32, mlua::Table, f32)| {
+        let rect = Rect::from_min_size(egui::pos2(x, y), Vec2::new(w, h));
+        let color = color_from_lua_table(color).unwrap();
+        this
+          .painter
+          .rect_stroke(rect, 0.0, Stroke::new(width, color));
+        Ok(())
+      },
+    );
+
+    methods.add_method_mut(
+      "update",
+      |_,
+       _: &mut LuaPainter,
+       ()| {
+        Ok(())
+      },
+    );
+
+    methods.add_method_mut(
+      "text",
+      |_,
+       this: &mut LuaPainter,
+       (x, y, text, font_size, color): (f32, f32, String, f32, mlua::Table)| {
+        let pos = egui::pos2(x, y);
+        let color = color_from_lua_table(color).unwrap();
+        this.painter.text(
+          pos,
+          Align2::LEFT_TOP,
+          text,
+          FontId::proportional(font_size),
+          color,
+        );
+        Ok(())
+      },
+    );
+
+    methods.add_method_mut(
+      "arrow",
+      |_,
+       this: &mut LuaPainter,
+       (x, y, dx, dy, color, width): (f32, f32, f32, f32, mlua::Table, f32)| {
+        let origin = egui::pos2(x, y);
+        let vec = egui::vec2(dx, dy);
+        let color = color_from_lua_table(color).unwrap();
+        this.painter.arrow(origin, vec, Stroke::new(width, color));
+        Ok(())
+      },
+    );
+
+    methods.add_method_mut(
+      "add_shape_from",
+      |_, this: &mut LuaPainter, table: mlua::Table| {
+        if let Some(shape) = shape::from_lua_table(table) {
+          this.painter.add(shape);
+        }
+        Ok(())
+      },
+    );
+
+    methods.add_method_mut(
+      "add_shape",
+      |_, this: &mut LuaPainter, shape: mlua::AnyUserData| {
+        let shape = shape.borrow::<LuaShape>().unwrap();
+        this.painter.extend(vec![shape.shape.clone()]);
+        Ok(())
+      },
+    );
+
+    methods.add_method_mut(
+      "extend_shapes_from",
+      |_, this: &mut LuaPainter, tables: mlua::Table| {
+        let mut shapes = Vec::new();
+        for table in tables.sequence_values::<mlua::Table>() {
+          if let Ok(table) = table {
+            if let Some(shape) = shape::from_lua_table(table) {
+              shapes.push(shape);
+            }
+          }
+        }
+        this.painter.extend(shapes);
+        Ok(())
+      },
+    );
+
+    methods.add_method_mut(
+      "extend_shapes",
+      |_, this: &mut LuaPainter, tables: mlua::Table| {
+        let mut shapes = Vec::new();
+        for shape in tables.sequence_values::<mlua::AnyUserData>() {
+          if let Ok(shape) = shape {
+            let shape = shape.borrow::<LuaShape>().unwrap();
+            shapes.push(shape.shape.clone())
+          }
+        }
+        this.painter.extend(shapes);
+        Ok(())
+      },
+    );
   }
 }
 
@@ -1278,6 +1443,22 @@ impl LuluUiApp {
   ) -> Self {
     egui_extras::install_image_loaders(&_cc.egui_ctx);
     lulu.lua.set_app_data(_cc.egui_ctx.clone());
+
+    lulu
+      .lua
+      .globals()
+      .set(
+        "Shape2D",
+        lulu
+          .lua
+          .create_function(|_, tab: mlua::Table| {
+            Ok(LuaShape {
+              shape: from_lua_table(tab).unwrap(),
+            })
+          })
+          .unwrap(),
+      )
+      .unwrap();
 
     lulu
       .lua
@@ -1433,17 +1614,13 @@ pub async fn run(lulu: &mut Lulu) -> Result<(), eframe::Error> {
   };
 
   let title = if let Ok(modname) = lulu.find_mod("ui-title") {
-    match lulu
-      .mods
-      .iter()
-      .find(|m| m.name == modname)
-    {
+    match lulu.mods.iter().find(|m| m.name == modname) {
       Some(m) => match m.source.clone() {
         LuluModSource::Bytecode(bytes) => String::from_utf8(bytes).unwrap(),
         LuluModSource::Code(_) => match lulu.exec_mod(&modname) {
           Ok(value) => lulu.lua.from_value::<String>(value).unwrap(),
           Err(_) => "Lulu UI".to_string(),
-        }
+        },
       },
       _ => "Lulu UI".to_string(),
     }
