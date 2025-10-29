@@ -5,16 +5,11 @@ use lulu::lulu::{Lulu, LuluModSource};
 use mlua::{LuaSerdeExt, UserData, UserDataMethods};
 
 pub fn color_from_lua_table(table: mlua::Table) -> Option<Color32> {
-  let r: f32 = table.get(1).ok()?;
-  let g: f32 = table.get(2).ok()?;
-  let b: f32 = table.get(3).ok()?;
+  let r: u8 = table.get(1).ok()?;
+  let g: u8 = table.get(2).ok()?;
+  let b: u8 = table.get(3).ok()?;
   let a: f32 = table.get(4).unwrap_or(1.0);
-  Some(Color32::from_rgba_unmultiplied(
-    (r * 255.0) as u8,
-    (g * 255.0) as u8,
-    (b * 255.0) as u8,
-    (a * 255.0) as u8,
-  ))
+  Some(Color32::from_rgba_unmultiplied(r, g, b, (a * 255.0) as u8))
 }
 
 fn to_align(s: &str) -> egui::Align {
@@ -120,9 +115,24 @@ macro_rules! widget_style {
             is_color!(val, $style.visuals.widgets.$state.weak_bg_fill);
           }
         );
-        // set_attrib!( ("bg_stroke", mlua::Table), style_table, |val: mlua::Table| {
-        // $style.visuals.widgets.$state.bg_stroke
-        // });
+        set_attrib!(
+          ("bg_stroke", mlua::Table),
+          style_table,
+          |val: mlua::Table| {
+            let color = color_from_lua_table(val.get::<mlua::Table>("color").unwrap()).unwrap();
+            let width = val.get::<f32>("width").unwrap();
+            $style.visuals.widgets.$state.bg_stroke = Stroke { width, color }
+          }
+        );
+        set_attrib!(
+          ("fg_stroke", mlua::Table),
+          style_table,
+          |val: mlua::Table| {
+            let color = color_from_lua_table(val.get::<mlua::Table>("color").unwrap()).unwrap();
+            let width = val.get::<f32>("width").unwrap();
+            $style.visuals.widgets.$state.fg_stroke = Stroke { width, color }
+          }
+        );
         set_attrib!(
           ("rounding", mlua::Value),
           style_table,
@@ -130,6 +140,9 @@ macro_rules! widget_style {
             $style.visuals.widgets.$state.rounding = table_into_rounding!(val);
           }
         );
+        set_attrib!(("expansion", f32), style_table, |val: f32| {
+          $style.visuals.widgets.$state.expansion = val;
+        });
       }
     );
   };
@@ -168,6 +181,84 @@ macro_rules! stylize_element {
       $element = $element.rounding(table_into_rounding!(rounding));
     }
   };
+}
+
+fn into_rich_text(text: mlua::Value) -> RichText {
+  let mut options: Option<mlua::Table> = None;
+
+  let text = match text {
+    mlua::Value::String(s) => s.to_str().unwrap().to_string(),
+    mlua::Value::Table(t) => {
+      options = Some(t.clone());
+      if let Ok(s) = t.get::<String>("text") {
+        s.clone()
+      } else {
+        "".to_string()
+      }
+    },
+    _ => "".to_string()
+  };
+
+
+  let mut rich = egui::RichText::new(text);
+
+  if let Some(options) = options {
+    if let Ok(color) = options.get::<mlua::Table>("color") {
+      rich = rich.color(color_from_lua_table(color.clone()).unwrap());
+    }
+
+    if let Ok(color) = options.get::<mlua::Table>("background_color") {
+      rich = rich.background_color(color_from_lua_table(color.clone()).unwrap());
+    }
+
+    if let Ok(line_height) = options.get::<f32>("line_height") {
+      rich = rich.line_height(Some(line_height));
+    }
+    
+    if let Ok(underline) = options.get::<bool>("underline") {
+      if underline {
+        rich = rich.underline();
+      }
+    }
+
+    if let Ok(raised) = options.get::<bool>("raised") {
+      if raised {
+        rich = rich.raised();
+      }
+    }
+    
+    if let Ok(strong) = options.get::<bool>("strong") {
+      if strong {
+        rich = rich.strong();
+      }
+    }
+    
+    if let Ok(code) = options.get::<bool>("code") {
+      if code {
+        rich = rich.code();
+      }
+    }
+    
+    if let Ok(strikethrough) = options.get::<bool>("strikethrough") {
+      if strikethrough {
+        rich = rich.strikethrough();
+      }
+    }
+
+    if let Ok(italics) = options.get::<bool>("italics") {
+      if italics {
+        rich = rich.italics();
+      }
+    }
+    
+    if let Ok( monospace) = options.get::<bool>(" monospace") {
+      if  monospace {
+        rich = rich.monospace();
+      }
+    }
+  }
+
+  rich
 }
 
 struct LuaVisuals(egui::Visuals);
@@ -269,8 +360,8 @@ impl<'ui> UserData for LuaUi<'ui> {
   fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
     methods.add_method_mut(
       "button",
-      |_lua, this: &mut LuaUi, (text, style): (String, Option<mlua::Table>)| {
-        let mut button = Button::new(text);
+      |_lua, this: &mut LuaUi, (text, style): (mlua::Value, Option<mlua::Table>)| {
+        let mut button = Button::new(into_rich_text(text));
 
         if let Some(style_table) = style {
           stylize_element!(button, style_table);
@@ -292,39 +383,39 @@ impl<'ui> UserData for LuaUi<'ui> {
         })
       },
     );
-    methods.add_method_mut("label", |_lua, this: &mut LuaUi, text: String| {
+    methods.add_method_mut("label", |_lua, this: &mut LuaUi, text: mlua::Value| {
       Ok(LuaUiResponse {
-        res: this.ui.label(text),
+        res: this.ui.label(into_rich_text(text)),
         value: None,
       })
     });
-    methods.add_method_mut("heading", |_lua, this: &mut LuaUi, text: String| {
+    methods.add_method_mut("heading", |_lua, this: &mut LuaUi, text: mlua::Value| {
       Ok(LuaUiResponse {
-        res: this.ui.heading(text),
+        res: this.ui.heading(into_rich_text(text)),
         value: None,
       })
     });
-    methods.add_method_mut("small", |_lua, this: &mut LuaUi, text: String| {
+    methods.add_method_mut("small", |_lua, this: &mut LuaUi, text: mlua::Value| {
       Ok(LuaUiResponse {
-        res: this.ui.small(text),
+        res: this.ui.small(into_rich_text(text)),
         value: None,
       })
     });
-    methods.add_method_mut("monospace", |_lua, this: &mut LuaUi, text: String| {
+    methods.add_method_mut("monospace", |_lua, this: &mut LuaUi, text: mlua::Value| {
       Ok(LuaUiResponse {
-        res: this.ui.monospace(text),
+        res: this.ui.monospace(into_rich_text(text)),
         value: None,
       })
     });
-    methods.add_method_mut("strong", |_lua, this: &mut LuaUi, text: String| {
+    methods.add_method_mut("strong", |_lua, this: &mut LuaUi, text: mlua::Value| {
       Ok(LuaUiResponse {
-        res: this.ui.strong(text),
+        res: this.ui.strong(into_rich_text(text)),
         value: None,
       })
     });
-    methods.add_method_mut("weak", |_lua, this: &mut LuaUi, text: String| {
+    methods.add_method_mut("weak", |_lua, this: &mut LuaUi, text: mlua::Value| {
       Ok(LuaUiResponse {
-        res: this.ui.weak(text),
+        res: this.ui.weak(into_rich_text(text)),
         value: None,
       })
     });
@@ -360,7 +451,7 @@ impl<'ui> UserData for LuaUi<'ui> {
         let mut img = match source {
           mlua::Value::UserData(ud) => {
             if let Ok(bytes) = ud.borrow::<lulu::ops::LuluByteArray>() {
-              Image::from_bytes("lua_image", bytes.bytes.clone())
+              Image::from_bytes("bytes://image", bytes.bytes.clone())
             } else {
               Image::new(include_image!("../assets/images/image-load-failed.png"))
             }
@@ -386,6 +477,9 @@ impl<'ui> UserData for LuaUi<'ui> {
           }
         };
 
+        let mut xy: Option<mlua::Table> = None;
+        let mut wh: Option<(f32, f32)> = None;
+
         if let Some(options) = options {
           if let Ok(size) = options.get::<f32>("fit_original") {
             img = img.fit_to_original_size(size);
@@ -397,6 +491,17 @@ impl<'ui> UserData for LuaUi<'ui> {
             let size = Vec2::new(fit.get(1).unwrap(), fit.get(2).unwrap());
             img = img.fit_to_exact_size(size);
           }
+          if let Ok(width) = options.get::<f32>("width") {
+            img = img.max_width(width);
+          }
+          if let Ok(height) = options.get::<f32>("height") {
+            img = img.max_width(height);
+          }
+          if let Ok(width) = options.get::<f32>("width") {
+            if let Ok(height) = options.get::<f32>("height") {
+              wh = Some((width, height));
+            }
+          }
           if let Ok(rotate) = options.get::<mlua::Table>("rotate") {
             let origin = Vec2::new(rotate.get(1).unwrap(), rotate.get(2).unwrap());
             img = img.rotate(rotate.get(3).unwrap(), origin);
@@ -407,12 +512,37 @@ impl<'ui> UserData for LuaUi<'ui> {
           if let Ok(spinner) = options.get::<bool>("spinner") {
             img = img.show_loading_spinner(spinner);
           }
+          if let Ok(at) = options.get::<mlua::Table>("at") {
+            xy = Some(at);
+          }
         }
 
-        Ok(LuaUiResponse {
-          res: this.ui.add(img),
-          value: None,
-        })
+        let mut r = None;
+        if let Some(xy) = xy {
+          let size = img.size();
+
+          let x = xy.get(1).unwrap();
+          let y = xy.get(2).unwrap();
+
+          let (w, h) = if let Some(size) = size {
+            (size.x, size.y)
+          } else if let Some(size) = wh {
+            size
+          } else {
+            (0.0, 0.0)
+          };
+
+          let rect = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w, h));
+
+          img.paint_at(this.ui, rect);
+        } else {
+          r = Some(LuaUiResponse {
+            res: this.ui.add(img),
+            value: None,
+          });
+        }
+
+        Ok(r)
       },
     );
 
@@ -801,9 +931,8 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "color_edit_button",
-      |_, this: &mut LuaUi, (r, g, b): (f32, f32, f32)| {
-        let mut color =
-          egui::Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
+      |_, this: &mut LuaUi, (r, g, b): (u8, u8, u8)| {
+        let mut color = egui::Color32::from_rgb(r, g, b);
         this.ui.color_edit_button_srgba(&mut color);
         Ok(())
       },
@@ -981,6 +1110,57 @@ impl<'ui> UserData for LuaUi<'ui> {
               .spacing
               .combo_height =
               val);
+          }
+        );
+
+        set_attrib!(
+          ("font", mlua::Table),
+          style_table,
+          |style_table: mlua::Table| {
+            set_attrib!(("button_size", f32), style_table, |val: f32| {
+              style.text_styles.insert(
+                egui::TextStyle::Button,
+                egui::FontId::new(val, egui::FontFamily::Proportional), //
+              );
+            });
+
+            set_attrib!(("body_size", f32), style_table, |val: f32| {
+              style.text_styles.insert(
+                egui::TextStyle::Body,
+                egui::FontId::new(val, egui::FontFamily::Proportional),
+              );
+            });
+
+            set_attrib!(("heading_size", f32), style_table, |val: f32| {
+              style.text_styles.insert(
+                egui::TextStyle::Heading,
+                egui::FontId::new(val, egui::FontFamily::Proportional),
+              );
+            });
+
+            set_attrib!(("mono_size", f32), style_table, |val: f32| {
+              style.text_styles.insert(
+                egui::TextStyle::Monospace,
+                egui::FontId::new(val, egui::FontFamily::Monospace),
+              );
+            });
+
+            set_attrib!(("scale", f32), style_table, |val: f32| {
+              style.text_styles.iter_mut().for_each(|(_, font_id)| {
+                font_id.size *= val;
+              });
+            });
+
+            set_attrib!(("family", String), style_table, |val: String| {
+              let family = if val.to_lowercase().contains("mono") {
+                egui::FontFamily::Monospace
+              } else {
+                egui::FontFamily::Proportional
+              };
+              for (_, font_id) in style.text_styles.iter_mut() {
+                font_id.family = family.clone();
+              }
+            });
           }
         );
 
@@ -1184,11 +1364,11 @@ impl<'ui> UserData for LuaUi<'ui> {
             ui.set_min_size(min_size);
           } else {
             if let Ok(w) = style.get::<String>("width") {
-              ui.set_min_width(get_size_attrib!(ui, w));
+              ui.set_max_width(get_size_attrib!(ui, w));
             }
 
             if let Ok(h) = style.get::<String>("height") {
-              ui.set_min_width(get_size_attrib!(ui, h));
+              ui.set_max_height(get_size_attrib!(ui, h));
             }
           }
 
@@ -1262,7 +1442,6 @@ impl<'ui> UserData for LuaUi<'ui> {
       },
     );
 
-    // clip_rect
     methods.add_method_mut("clip_rect", |_, this: &mut LuaUi, ()| {
       let rect = this.ui.clip_rect();
       Ok((rect.min.x, rect.min.y, rect.max.x, rect.max.y))
@@ -1271,6 +1450,33 @@ impl<'ui> UserData for LuaUi<'ui> {
     methods.add_method_mut("painter", |_, this: &mut LuaUi, ()| {
       let painter = this.ui.painter().clone();
       Ok(LuaPainter { painter })
+    });
+
+    methods.add_method("keydown", |_, this: &LuaUi, key: String| {
+      use egui::Key;
+
+      let key = Key::from_name(&key).unwrap();
+
+      let down = this.ui.ctx().input(|i| i.key_down(key));
+      Ok(down)
+    });
+
+    methods.add_method("keypressed", |_, this: &LuaUi, key: String| {
+      use egui::Key;
+
+      let key = Key::from_name(&key).unwrap();
+
+      let pressed = this.ui.ctx().input(|i| i.key_pressed(key));
+      Ok(pressed)
+    });
+
+    methods.add_method("keyup", |_, this: &LuaUi, key: String| {
+      use egui::Key;
+
+      let key = Key::from_name(&key).unwrap();
+
+      let released = this.ui.ctx().input(|i| i.key_released(key));
+      Ok(released)
     });
   }
 }
@@ -1341,27 +1547,8 @@ impl UserData for LuaPainter {
         Ok(())
       },
     );
-    
-    // methods.add_method_mut(
-    //   "image",
-    //   |_,
-    //    this: &mut LuaPainter,
-    //    (): ()| {
-    //     this
-    //       .painter
-    //       .image(rect, 0.0, Stroke::new(width, color));
-    //     Ok(())
-    //   },
-    // );
 
-    methods.add_method_mut(
-      "update",
-      |_,
-       _: &mut LuaPainter,
-       ()| {
-        Ok(())
-      },
-    );
+    methods.add_method_mut("update", |_, _: &mut LuaPainter, ()| Ok(()));
 
     methods.add_method_mut(
       "text",

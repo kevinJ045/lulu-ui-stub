@@ -41,16 +41,16 @@
           libdecor
 
           # Audio
-          # alsa-lib
+          alsa-lib
           # pulseaudio
           # pipewire
           # pipewire.jack
 
           # Input / misc
-          # dbus
-          # ibus
-          # systemd
-          # libusb1
+          dbus
+          ibus
+          systemd
+          libusb1
 
           # EGL / GLES / Vulkan
           # vulkan-loader

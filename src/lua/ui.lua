@@ -302,7 +302,12 @@ local function handle_style(self, ui)
 end
 
 local function register_element(name, options_default, render)
-  local class! @widget_defaults(options_default) _c:Widget, {
+  local class! @widget_defaults(options_default) _c:Widget, (options) {
+    if options.props and options.props.child then
+      options.props.children = { options.props.child }
+      options.props.child = nil
+    end
+  }, {
     _render(ui){
       render(self, ui)
     }
@@ -349,6 +354,7 @@ local function handle_change(self, name, response)
 end
 
 local function handle_reponse(self, response)
+  if not response then return end
   self.is_pointer_button_down_on = response.is_pointer_button_down_on
   self.drag_delta = response.drag_delta
   self.contains_pointer = response.contains_pointer
@@ -456,7 +462,7 @@ ui.Spinner = register_element("spinner", {}, function(self, ui)
   handle_reponse(self, ui:spinner())
 end)
 
-ui.Image = register_element("image", {}, function(self, ui)
+ui.Image = register_element("image", { src = "" }, function(self, ui)
   handle_reponse(self, ui:image(get_prop_val(self.props.src), self.props))
 end)
 
@@ -513,7 +519,19 @@ ui.VBox = register_element("vbox", {}, function(self, ui)
   end)
 end)
 
-ui.StyleWrapper = register_element("style", {}, function(self, ui)
+ui.VBoxCentered = register_element("vbox_centered", {}, function(self, ui)
+  ui:vertical_centered(function(ui)
+    render_from(self.children, ui)
+  end)
+end)
+
+ui.VBoxCenterJustified = register_element("vbox_center_justified", {}, function(self, ui)
+  ui:vertical_centered_justified(function(ui)
+    render_from(self.children, ui)
+  end)
+end)
+
+ui.Style = register_element("style", {}, function(self, ui)
   handle_style(self, ui)
   render_from(self.children, ui)
 end)
@@ -664,6 +682,56 @@ function UIOverride(name, fn)
     return _class
   end
 end
+
+local function hex_to_num(s)
+  return tonumber(s, 16) or 0
+end
+
+local function expand_shorthand(hex)
+  return hex:gsub(".", function(c) return c..c end)
+end
+
+function txt(text)
+  return tostring(text)
+end
+
+function c(hex)
+  if type(hex) ~= "string" then
+    return nil, "hex must be a string"
+  end
+
+  local s = hex:match("^%s*(.-)%s*$")
+  s = s:gsub("^#", ""):gsub("^0x", ""):gsub("^0X", "")
+
+  if #s == 3 then
+    s = expand_shorthand(s)
+  elseif #s == 4 then
+    local rgb = s:sub(1,3)
+    local a = s:sub(4,4)
+    s = expand_shorthand(rgb) .. (a..a)
+  elseif #s == 6 then
+  elseif #s == 8 then
+  else
+    return nil, ("invalid hex length: %d (expected 3,4,6 or 8)"):format(#s)
+  end
+
+  local r = hex_to_num(s:sub(1,2))
+  local g = hex_to_num(s:sub(3,4))
+  local b = hex_to_num(s:sub(5,6))
+  local a = 255
+  if #s == 8 then
+    a = hex_to_num(s:sub(7,8))
+  end
+
+  local rf, gf, bf, af = r, g, b, a / 255
+
+  local t = {
+    r = rf, g = gf, b = bf, a = af,
+    [1] = rf, [2] = gf, [3] = bf, [4] = af,
+  }
+  return t
+end
+
 
 return function()
   register_font("DejaVuSansMono", DEJAVU_FONT_BYTES)

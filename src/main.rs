@@ -14,6 +14,7 @@ async fn main() -> mlua::Result<()> {
   let lua_font_bytes = lulu.lua.create_string(&font_bytes)?;
   lulu.lua.globals().set("DEJAVU_FONT_BYTES", lua_font_bytes)?;
 
+  lulu.compiler.compile(include_str!("./lua/macros.lua"), None, None);
 
   if let Some(mods) = lulu::bundle::load_embedded_scripts() {
     lulu::bundle::reg_bundle_nods(&mut lulu, mods)?;
