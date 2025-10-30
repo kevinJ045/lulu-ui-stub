@@ -1370,6 +1370,14 @@ impl<'ui> UserData for LuaUi<'ui> {
             if let Ok(h) = style.get::<String>("height") {
               ui.set_max_height(get_size_attrib!(ui, h));
             }
+
+            if let Ok(w) = style.get::<String>("min_width") {
+              ui.set_min_width(get_size_attrib!(ui, w));
+            }
+
+            if let Ok(h) = style.get::<String>("min_height") {
+              ui.set_min_height(get_size_attrib!(ui, h));
+            }
           }
 
           lua
