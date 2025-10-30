@@ -121,7 +121,7 @@ class! @into_collectible("collect") State(@default_to("") value), {
     elseif type(self.value) == "number" then
       self:set(self.value + val)
     elseif instanceof(self.value, Vec) then
-      self.value.push(val)
+      self.value:push(val)
       self:set(self.value)
     elseif type(self.value) == "table" then
       table.insert(self.value, val)
