@@ -428,11 +428,31 @@ impl<'ui> UserData for LuaUi<'ui> {
         })
       },
     );
+
     methods.add_method_mut(
       "text_edit_singleline",
-      |lua, this: &mut LuaUi, text: String| {
+      |lua, this: &mut LuaUi, (text, placeholder): (String, Option<String>)| {
         let mut value = text;
-        let res = this.ui.text_edit_singleline(&mut value);
+        let textedit = egui::TextEdit::singleline(&mut value).hint_text(placeholder.unwrap_or("".to_string()));
+        let res = this.ui.add(textedit);
+
+        let lua_value = lua.create_string(&value)?;
+
+        let lua_response = lua.create_userdata(LuaUiResponse {
+          res,
+          value: Some(mlua::Value::String(lua_value)),
+        })?;
+
+        Ok(lua_response)
+      },
+    );
+
+    methods.add_method_mut(
+      "text_edit_multiline",
+      |lua, this: &mut LuaUi, (text, placeholder): (String, Option<String>)| {
+        let mut value = text;
+        let textedit = egui::TextEdit::multiline(&mut value).hint_text(placeholder.unwrap_or("".to_string()));
+        let res = this.ui.add(textedit);
 
         let lua_value = lua.create_string(&value)?;
 
@@ -604,23 +624,6 @@ impl<'ui> UserData for LuaUi<'ui> {
         };
 
         let lua_response = lua.create_userdata(LuaUiResponse { res, value })?;
-
-        Ok(lua_response)
-      },
-    );
-
-    methods.add_method_mut(
-      "text_edit_multiline",
-      |lua, this: &mut LuaUi, text: String| {
-        let mut value = text;
-        let res = this.ui.text_edit_multiline(&mut value);
-
-        let lua_value = lua.create_string(&value)?;
-
-        let lua_response = lua.create_userdata(LuaUiResponse {
-          res,
-          value: Some(mlua::Value::String(lua_value)),
-        })?;
 
         Ok(lua_response)
       },

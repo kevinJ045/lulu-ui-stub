@@ -397,9 +397,14 @@ local function get_value(val)
   end
 end
 
-local function handle_events(self, event, response)
+local function handle_events(ui, self, event, response)
   if response[event] then
-    self:emit(event, get_value(response.value))
+    self:emit(event, {
+      value = get_value(response.value),
+      keydown = function(key) return ui:keydown(key) end,
+      keypressed = function(key) return ui:keypressed(key) end,
+      keyup = function(key) return ui:keyup(key) end
+    })
   end
 end
 
@@ -415,7 +420,7 @@ local function handle_change(self, name, response)
   return response
 end
 
-local function handle_reponse(self, response)
+local function handle_reponse(ui, self, response)
   if not response then return end
   self.is_pointer_button_down_on = response.is_pointer_button_down_on
   self.drag_delta = response.drag_delta
@@ -424,21 +429,21 @@ local function handle_reponse(self, response)
     return response.interact_pointer_pos
   end
 
-  handle_events(self, "clicked", response)
-  handle_events(self, "middle_clicked", response)
-  handle_events(self, "double_clicked", response)
-  handle_events(self, "triple_clicked", response)
-  handle_events(self, "clicked_elsewhere", response)
-  handle_events(self, "lost_focus", response)
-  handle_events(self, "gained_focus", response)
-  handle_events(self, "has_focus", response)
-  handle_events(self, "hovered", response)
-  handle_events(self, "changed", response)
-  handle_events(self, "highlighted", response)
-  handle_events(self, "long_touched", response)
-  handle_events(self, "drag_started", response)
-  handle_events(self, "dragged", response)
-  handle_events(self, "drag_stopped", response)
+  handle_events(ui, self, "clicked", response)
+  handle_events(ui, self, "middle_clicked", response)
+  handle_events(ui, self, "double_clicked", response)
+  handle_events(ui, self, "triple_clicked", response)
+  handle_events(ui, self, "clicked_elsewhere", response)
+  handle_events(ui, self, "lost_focus", response)
+  handle_events(ui, self, "gained_focus", response)
+  handle_events(ui, self, "has_focus", response)
+  handle_events(ui, self, "hovered", response)
+  handle_events(ui, self, "changed", response)
+  handle_events(ui, self, "highlighted", response)
+  handle_events(ui, self, "long_touched", response)
+  handle_events(ui, self, "drag_started", response)
+  handle_events(ui, self, "dragged", response)
+  handle_events(ui, self, "drag_stopped", response)
 
   return response
 end
@@ -465,90 +470,90 @@ local function get_prop_val(val)
 end
 
 ui.ColoredLabel = register_element("colored_label", { text = "", color = { 150, 150, 150, 255 } }, function(self, ui)
-  handle_reponse(self, ui:colored_label(get_prop_val(self.props.text), get_prop_val(self.props.color)))
+  handle_reponse(ui, self, ui:colored_label(get_prop_val(self.props.text), get_prop_val(self.props.color)))
 end)
 
 ui.Label = register_element("label", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:label(get_prop_val(self.props.text)))
+  handle_reponse(ui, self, ui:label(get_prop_val(self.props.text)))
 end)
 
 ui.Heading = register_element("heading", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:heading(get_prop_val(self.props.text)))
+  handle_reponse(ui, self, ui:heading(get_prop_val(self.props.text)))
 end)
 
 ui.Small = register_element("small", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:small(get_prop_val(self.props.text)))
+  handle_reponse(ui, self, ui:small(get_prop_val(self.props.text)))
 end)
 
 ui.Weak = register_element("weak", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:weak(get_prop_val(self.props.text)))
+  handle_reponse(ui, self, ui:weak(get_prop_val(self.props.text)))
 end)
 
 ui.Strong = register_element("strong", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:strong(get_prop_val(self.props.text)))
+  handle_reponse(ui, self, ui:strong(get_prop_val(self.props.text)))
 end)
 
 ui.Monospace = register_element("monospace", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:monospace(get_prop_val(self.props.text)))
+  handle_reponse(ui, self, ui:monospace(get_prop_val(self.props.text)))
 end)
 
 ui.Hyperlink = register_element("hyperlink", { text = "" }, function(self, ui)
-  handle_reponse(self, self.props.url and ui:hyperlink_to(get_prop_val(self.props.text), get_prop_val(self.props.url)) or ui:hyperlink(get_prop_val(self.props.text)))
+  handle_reponse(ui, self, self.props.url and ui:hyperlink_to(get_prop_val(self.props.text), get_prop_val(self.props.url)) or ui:hyperlink(get_prop_val(self.props.text)))
 end)
 
 ui.Link = register_element("link", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:link(get_prop_val(self.props.text)))
+  handle_reponse(ui, self, ui:link(get_prop_val(self.props.text)))
 end)
 
 ui.Button = register_element("button", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:button(get_prop_val(self.props.text), get_prop_val(self.props.style)))
+  handle_reponse(ui, self, ui:button(get_prop_val(self.props.text), get_prop_val(self.props.style)))
 end)
 
 ui.Checkbox = register_element("checkbox", { text = "", checked = false }, function(self, ui)
-  handle_reponse(self, handle_change(self, "checked", ui:checkbox(get_prop_val(self.props.text), get_prop_val(self.props.checked))))
+  handle_reponse(ui, self, handle_change(self, "checked", ui:checkbox(get_prop_val(self.props.text), get_prop_val(self.props.checked))))
 end)
 
 ui.Dragvalue = register_element("drag_value", { text = "", min = 0.0, max = 100.0, value = 0.0 }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:drag_value(get_prop_val(self.props.text), get_prop_val(self.props.value))))
+  handle_reponse(ui, self, handle_change(self, "value", ui:drag_value(get_prop_val(self.props.text), get_prop_val(self.props.value))))
 end)
 
 ui.Slider = register_element("slider", { text = "", value = 0.0 }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:drag_value(get_prop_val(self.props.text), get_prop_val(self.props.value))))
+  handle_reponse(ui, self, handle_change(self, "value", ui:drag_value(get_prop_val(self.props.text), get_prop_val(self.props.value))))
 end)
 
 ui.Separator = register_element("separator", {}, function(self, ui)
-  handle_reponse(self, ui:separator())
+  handle_reponse(ui, self, ui:separator())
 end)
 
 ui.Spinner = register_element("spinner", {}, function(self, ui)
-  handle_reponse(self, ui:spinner())
+  handle_reponse(ui, self, ui:spinner())
 end)
 
 ui.Image = register_element("image", { src = "" }, function(self, ui)
-  handle_reponse(self, ui:image(get_prop_val(self.props.src), self.props))
+  handle_reponse(ui, self, ui:image(get_prop_val(self.props.src), self.props))
 end)
 
 ui.Combobox = register_element("combobox", { text = "Select", selected = "", values = {} }, function(self, ui)
-  handle_reponse(self, handle_change(self, "selected", ui:combobox(get_prop_val(self.props.text), get_prop_val(self.props.selected), get_prop_val(self.props.values), self.props.render_item)))
+  handle_reponse(ui, self, handle_change(self, "selected", ui:combobox(get_prop_val(self.props.text), get_prop_val(self.props.selected), get_prop_val(self.props.values), self.props.render_item)))
 end)
 
 ui.Code = register_element("code", { text = "" }, function(self, ui)
-  handle_reponse(self, ui:code(get_prop_val(self.props.text)))
+  handle_reponse(ui, self, ui:code(get_prop_val(self.props.text)))
 end)
 
 ui.CodeEditor = register_element("code_editor", { text = "" }, function(self, ui)
-  handle_reponse(self, handle_change(self, "text", ui:code_editor(get_prop_val(self.props.text))))
+  handle_reponse(ui, self, handle_change(self, "text", ui:code_editor(get_prop_val(self.props.text))))
 end)
 
 ui.ProgressBar = register_element("progress_bar", { value = 0.0, text = "" }, function(self, ui)
-  handle_reponse(self, ui:progress_bar(get_prop_val(self.props.value), get_prop_val(self.props.text)))
+  handle_reponse(ui, self, ui:progress_bar(get_prop_val(self.props.value), get_prop_val(self.props.text)))
 end)
 
-ui.TextEditSingleLine = register_element("input", { value = "" }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:text_edit_singleline(get_prop_val(self.props.value))))
+ui.Input = register_element("input", { value = "", placeholder = "" }, function(self, ui)
+  handle_reponse(ui, self, handle_change(self, "value", ui:text_edit_singleline(get_prop_val(self.props.value), get_prop_val(self.props.placeholder))))
 end)
-ui.TextEditMultiLine = register_element("textbox", { value = "" }, function(self, ui)
-  handle_reponse(self, handle_change(self, "value", ui:text_edit_multiline(get_prop_val(self.props.value))))
+ui.InputMulti = register_element("textbox", { value = "" }, function(self, ui)
+  handle_reponse(ui, self, handle_change(self, "value", ui:text_edit_multiline(get_prop_val(self.props.value), get_prop_val(self.props.placeholder))))
 end)
 
 ui.Align = register_element("align", { align = "start", layout = "left_to_right" }, function(self, ui)
