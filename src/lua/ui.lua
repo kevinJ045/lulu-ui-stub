@@ -310,6 +310,10 @@ class! Widget:Node, {
     self._dunders.focus = true
     return self
   }
+  scroll_to_me(){
+    self._dunders.scroll_to_me = true
+    return self
+  }
   on(event, fn){
     self._event_handlers:push(collect! { event, fn })
     return self
@@ -452,10 +456,14 @@ local function handle_reponse(ui, self, response)
   handle_events(ui, self, "drag_stopped", response)
 
   if self._dunders.focus then
-    print('Focus')
     if response.has_focus then
       self._dunders.focus = nil
     end
+  end
+  
+  if self._dunders.scroll_to_me then
+    self._dunders.scroll_to_me = nil
+    response:scroll_to_me()
   end
 
   return response
@@ -591,8 +599,16 @@ ui.CollapsingHeader = register_element("collapsing_header", { text = "" }, funct
   end)
 end)
 
-ui.ScrollArea = register_element("scroll-area", {}, function(self, ui)
-  ui:scroll_area(function(ui)
+ui.ScrollArea = register_element("scroll-area", {
+  stick_to_right = false,
+  stick_to_bottom = false,
+  horizontal = false,
+  auto_shrink = true,
+  vscroll = true,
+  drag_to_scroll = false,
+  animated = true,
+}, function(self, ui)
+  ui:scroll_area(self.props, function(ui)
     render_from(self.children, ui)
   end)
 end)

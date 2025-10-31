@@ -66,6 +66,8 @@
         }
       },
       child = ScrollArea {
+        stick_to_bottom = true,
+        id = "ddd",
         children = {
           Each {
             items = BLOCKS,

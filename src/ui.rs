@@ -306,6 +306,10 @@ impl UserData for LuaUiResponse {
       this.res.request_focus();
       Ok(())
     });
+    methods.add_method_mut("scroll_to_me", |_lua, this: &mut LuaUiResponse, align: Option<String>| {
+      this.res.scroll_to_me(align.map(|a| to_align(&a)));
+      Ok(())
+    });
   }
 
   fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
@@ -454,12 +458,11 @@ impl<'ui> UserData for LuaUi<'ui> {
           egui::TextEdit::singleline(&mut value)
         };
 
-
         if let Some(options_table) = options {
           if let Ok(w) = options_table.get::<String>("width") {
             textedit = textedit.desired_width(get_size_attrib!(this.ui, w));
           }
-          let mut size: (f32, f32) = (0., 0.); 
+          let mut size: (f32, f32) = (0., 0.);
           if let Ok(w) = options_table.get::<String>("min_width") {
             size.0 = get_size_attrib!(this.ui, w);
           }
@@ -898,19 +901,64 @@ impl<'ui> UserData for LuaUi<'ui> {
 
     methods.add_method_mut(
       "scroll_area",
-      |lua, this: &mut LuaUi, func: mlua::Function| {
-        egui::ScrollArea::vertical().show(this.ui, |ui| {
+      |lua, this: &mut LuaUi, (options, func): (Option<mlua::Table>, mlua::Function)| {
+        let mut scroll_area = egui::ScrollArea::vertical();
+
+        if let Some(opts) = options {
+          if let Ok(horizontal) = opts.get::<bool>("horizontal") {
+            if horizontal {
+              scroll_area = egui::ScrollArea::horizontal();
+            }
+          }
+
+          if let Ok(auto_shrink) = opts.get::<bool>("auto_shrink") {
+            scroll_area = scroll_area.auto_shrink([auto_shrink; 2]);
+          }
+
+          if let Ok(hscroll) = opts.get::<bool>("hscroll") {
+            scroll_area = scroll_area.hscroll(hscroll);
+          }
+
+          if let Ok(vscroll) = opts.get::<bool>("vscroll") {
+            scroll_area = scroll_area.vscroll(vscroll);
+          }
+
+          if let Ok(drag_to_scroll) = opts.get::<bool>("drag_to_scroll") {
+            scroll_area = scroll_area.drag_to_scroll(drag_to_scroll);
+          }
+
+          if let Ok(animated) = opts.get::<bool>("animated") {
+            scroll_area = scroll_area.animated(animated);
+          }
+
+          if let Ok(max_height) = opts.get::<String>("max_height") {
+            let max_h = get_size_attrib!(this.ui, max_height);
+            scroll_area = scroll_area.max_height(max_h);
+          }
+
+          if let Ok(right) = opts.get::<bool>("stick_to_right") {
+            scroll_area = scroll_area.stick_to_right(right);
+          }
+          if let Ok(bottom) = opts.get::<bool>("stick_to_bottom") {
+            scroll_area = scroll_area.stick_to_bottom(bottom);
+          }
+        }
+
+        scroll_area.show(this.ui, |ui| {
           lua
             .scope(|scope| {
               let lua_ui = scope.create_userdata(LuaUi { ui }).unwrap();
+
               let temp_func = scope
                 .create_function(move |_lua, ()| func.call::<()>(lua_ui.clone()))
                 .unwrap();
               temp_func.call::<()>(()).unwrap();
+
               Ok(())
             })
             .unwrap();
         });
+
         Ok(())
       },
     );
