@@ -80,7 +80,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v1
         with:
-          files: target/aarch64-unknown-linux-gnu/release/lulu-ui-linux-aarch64
+          files: dist/lulu-ui-linux-aarch64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -97,6 +97,6 @@ jobs:
           cp target/release/lulu-ui dist/lulu-ui-darwin
       - uses: softprops/action-gh-release@v1
         with:
-          files: target/lulu-ui-darwin
+          files: dist/lulu-ui-darwin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
