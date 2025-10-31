@@ -195,10 +195,9 @@ fn into_rich_text(text: mlua::Value) -> RichText {
       } else {
         "".to_string()
       }
-    },
-    _ => "".to_string()
+    }
+    _ => "".to_string(),
   };
-
 
   let mut rich = egui::RichText::new(text);
 
@@ -214,7 +213,7 @@ fn into_rich_text(text: mlua::Value) -> RichText {
     if let Ok(line_height) = options.get::<f32>("line_height") {
       rich = rich.line_height(Some(line_height));
     }
-    
+
     if let Ok(underline) = options.get::<bool>("underline") {
       if underline {
         rich = rich.underline();
@@ -226,19 +225,19 @@ fn into_rich_text(text: mlua::Value) -> RichText {
         rich = rich.raised();
       }
     }
-    
+
     if let Ok(strong) = options.get::<bool>("strong") {
       if strong {
         rich = rich.strong();
       }
     }
-    
+
     if let Ok(code) = options.get::<bool>("code") {
       if code {
         rich = rich.code();
       }
     }
-    
+
     if let Ok(strikethrough) = options.get::<bool>("strikethrough") {
       if strikethrough {
         rich = rich.strikethrough();
@@ -250,9 +249,9 @@ fn into_rich_text(text: mlua::Value) -> RichText {
         rich = rich.italics();
       }
     }
-    
-    if let Ok( monospace) = options.get::<bool>(" monospace") {
-      if  monospace {
+
+    if let Ok(monospace) = options.get::<bool>(" monospace") {
+      if monospace {
         rich = rich.monospace();
       }
     }
@@ -302,6 +301,13 @@ struct LuaUiResponse {
 }
 
 impl UserData for LuaUiResponse {
+  fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+    methods.add_method_mut("focus", |_lua, this: &mut LuaUiResponse, ()| {
+      this.res.request_focus();
+      Ok(())
+    });
+  }
+
   fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
     fields.add_field_method_get("value", |_, this| {
       Ok(match this.value.clone() {
@@ -430,36 +436,103 @@ impl<'ui> UserData for LuaUi<'ui> {
     );
 
     methods.add_method_mut(
-      "text_edit_singleline",
-      |lua, this: &mut LuaUi, (text, placeholder): (String, Option<String>)| {
+      "text_edit",
+      |lua,
+       this: &mut LuaUi,
+       (edit_type, text, should_focus, options): (
+        String,
+        String,
+        Option<bool>,
+        Option<mlua::Table>,
+      )| {
         let mut value = text;
-        let textedit = egui::TextEdit::singleline(&mut value).hint_text(placeholder.unwrap_or("".to_string()));
+        let mut id: Option<Id> = None;
+
+        let mut textedit = if edit_type == "multiline" {
+          egui::TextEdit::multiline(&mut value)
+        } else {
+          egui::TextEdit::singleline(&mut value)
+        };
+
+
+        if let Some(options_table) = options {
+          if let Ok(w) = options_table.get::<String>("width") {
+            textedit = textedit.desired_width(get_size_attrib!(this.ui, w));
+          }
+          let mut size: (f32, f32) = (0., 0.); 
+          if let Ok(w) = options_table.get::<String>("min_width") {
+            size.0 = get_size_attrib!(this.ui, w);
+          }
+          if let Ok(w) = options_table.get::<String>("min_height") {
+            size.1 = get_size_attrib!(this.ui, w);
+          }
+          if let Ok(text_color) = options_table.get::<mlua::Table>("text_color") {
+            textedit = textedit.text_color(color_from_lua_table(text_color).unwrap());
+          }
+          if let Ok(char_limit) = options_table.get::<usize>("char_limit") {
+            textedit = textedit.char_limit(char_limit);
+          }
+          if let Ok(id_opt) = options_table.get::<String>("id") {
+            id = Some(egui::Id::new(id_opt));
+            textedit = textedit.id(id.unwrap());
+          }
+          if let Ok(placeholder) = options_table.get::<String>("placeholder") {
+            textedit = textedit.hint_text(placeholder);
+          }
+          if let Ok(password) = options_table.get::<bool>("password") {
+            textedit = textedit.password(password);
+          }
+          if let Ok(code_editor) = options_table.get::<bool>("code_editor") {
+            if code_editor {
+              textedit = textedit.code_editor();
+            }
+          }
+          if let Ok(interactive) = options_table.get::<bool>("interactive") {
+            textedit = textedit.interactive(interactive);
+          }
+          if let Ok(clip_text) = options_table.get::<bool>("clip_text") {
+            textedit = textedit.clip_text(clip_text);
+          }
+          if let Ok(frame) = options_table.get::<bool>("frame") {
+            textedit = textedit.frame(frame);
+          }
+          if let Ok(cursor_at_end) = options_table.get::<bool>("cursor_at_end") {
+            textedit = textedit.cursor_at_end(cursor_at_end);
+          }
+          if let Ok(desired_height_rows) = options_table.get::<usize>("rows") {
+            textedit = textedit.desired_rows(desired_height_rows);
+          }
+
+          if size.0 > 0.0 || size.1 > 0.0 {
+            textedit = textedit.min_size(Vec2::new(size.0, size.1));
+          }
+
+          if let Ok(halign) = options_table.get::<String>("halign") {
+            textedit = textedit.horizontal_align(to_align(&halign));
+          }
+          if let Ok(valign) = options_table.get::<String>("valign") {
+            textedit = textedit.vertical_align(to_align(&valign));
+          }
+
+          if let Ok(margin) = options_table.get::<mlua::Value>("margin") {
+            textedit = textedit.margin(table_into_margin!(margin));
+          }
+        }
+
         let res = this.ui.add(textedit);
 
         let lua_value = lua.create_string(&value)?;
-
         let lua_response = lua.create_userdata(LuaUiResponse {
           res,
           value: Some(mlua::Value::String(lua_value)),
         })?;
 
-        Ok(lua_response)
-      },
-    );
-
-    methods.add_method_mut(
-      "text_edit_multiline",
-      |lua, this: &mut LuaUi, (text, placeholder): (String, Option<String>)| {
-        let mut value = text;
-        let textedit = egui::TextEdit::multiline(&mut value).hint_text(placeholder.unwrap_or("".to_string()));
-        let res = this.ui.add(textedit);
-
-        let lua_value = lua.create_string(&value)?;
-
-        let lua_response = lua.create_userdata(LuaUiResponse {
-          res,
-          value: Some(mlua::Value::String(lua_value)),
-        })?;
+        if let (Some(id), Some(true)) = (id, should_focus) {
+          println!("Focus Check");
+          if this.ui.memory(|mem| !mem.has_focus(id)) {
+            this.ui.memory_mut(|mem| mem.request_focus(id));
+          }
+        }
 
         Ok(lua_response)
       },

@@ -1,50 +1,104 @@
 
+
 () @namespace(ui) =>
 
-  local (self, props) @Component AddButton =>
-    return Button {
-      text = f"Add",
-      on_clicked = function()
-        props.clicked:add(1)
-      end
-    }
-  end
+  local BLOCKS = State(Vec())
 
-  local (self, props) @Component SubButton =>
-    return Button {
-      text = f"Subtract",
-      on_clicked = function()
-        props.clicked:sub(1)
-      end
-    }
-  end
+  (self, props) @Component Block =>
+    return Frame {
+        style = {
+          color = c"#181825",
+          min_width = "100%"
+        },
+        child = Label {
+          text = props.text
+        }
+      }
+  end 
 
-  local (self) @AutoRender @StatedComponent({
-    clicked = 0
-  }) @Component AppRoot =>
-    return VBox {
-      children = {
-        {
-          match! self.clicked:get(), {
-            (val > 10) {
-              return ColoredLabel {
-                text = "Too much",
-                color = { 255, 255, 255, 255 }
+  (self) @AutoRender @StatedComponent({
+    currentCommand = ""
+  }) @Component =>
+
+    return Style {
+      style = {
+        spacing = {
+          button_padding = { 15, 5 },
+        },
+        visuals = {
+          panel_fill = c"#1e1e2e",
+          noninteractive = {
+            bg_fill = c"#181825",
+            weak_bg_fill = c"#181825",
+          },
+          inactive = {
+            bg_fill = c"#181825",
+            weak_bg_fill = c"#181825",
+            rounding = { 20, 20, 20, 20 }
+          },
+          active = {
+            bg_fill = c"#cba6f7",
+            weak_bg_fill = c"#cba6f7",
+            rounding = { 20, 20, 20, 20 }
+          },
+          open = {
+            bg_fill = c"#1e1e2e",
+            weak_bg_fill = c"#1e1e2e",
+            fg_stroke = {
+              width = 1.0,
+              color = c"#cdd6f4"
+            },
+            rounding = { 20, 20, 20, 20 }
+          },
+          hovered = {
+            bg_fill = c"#cba6f7",
+            weak_bg_fill = c"#cba6f7",
+            bg_stroke = {
+              width = 1.0,
+              color = c"#181825"
+            },
+            fg_stroke = {
+              width = 1.0,
+              color = c"#181825"
+            },
+            rounding = { 20, 20, 20, 20 }
+          }
+        }
+      },
+      child = ScrollArea {
+        children = {
+          Each {
+            items = BLOCKS,
+            render = function(e)
+              return Block {
+                text = e
+              }
+            end
+          },
+
+          HBox {
+            children = {
+              Input {
+                text = self.currentCommand,
+                id = "mytextedit",
+                frame = false,
+                multiline = true,
+                placeholder = "hello",
+                width = "100%",
+                on_changed = function(s, e)
+                  if e.keypressed('Enter') then
+                    BLOCKS:push(e.value)
+                    self.currentCommand:set("")
+                    s:focus()
+                  end
+                end
               }
             }
-          }
-        },
-        Label {
-          text = f"Clicked: {self.clicked:get()}"
-        },
-        HBox {
-          children = {
-            AddButton { clicked = self.clicked },
-            SubButton { clicked = self.clicked },
           }
         }
       }
     }
+
   end
 
 end

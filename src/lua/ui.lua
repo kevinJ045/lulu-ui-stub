@@ -296,6 +296,7 @@ class! @into_collectible("collect") Node(@default_to("") #name, @default_to(Vec(
 
 class! Widget:Node, {
   init(){
+    self._dunders = {}
     self._event_handlers = Vec()
     for k, v in pairs(self.props.__real) do
       if k:sub(1, 3) == "on_" then
@@ -304,6 +305,10 @@ class! Widget:Node, {
         self.props[k] = nil
       end
     end
+  }
+  focus(){
+    self._dunders.focus = true
+    return self
   }
   on(event, fn){
     self._event_handlers:push(collect! { event, fn })
@@ -403,7 +408,8 @@ local function handle_events(ui, self, event, response)
       value = get_value(response.value),
       keydown = function(key) return ui:keydown(key) end,
       keypressed = function(key) return ui:keypressed(key) end,
-      keyup = function(key) return ui:keyup(key) end
+      keyup = function(key) return ui:keyup(key) end,
+      focus = function() return response:focus() end
     })
   end
 end
@@ -444,6 +450,13 @@ local function handle_reponse(ui, self, response)
   handle_events(ui, self, "drag_started", response)
   handle_events(ui, self, "dragged", response)
   handle_events(ui, self, "drag_stopped", response)
+
+  if self._dunders.focus then
+    print('Focus')
+    if response.has_focus then
+      self._dunders.focus = nil
+    end
+  end
 
   return response
 end
@@ -549,11 +562,21 @@ ui.ProgressBar = register_element("progress_bar", { value = 0.0, text = "" }, fu
   handle_reponse(ui, self, ui:progress_bar(get_prop_val(self.props.value), get_prop_val(self.props.text)))
 end)
 
-ui.Input = register_element("input", { value = "", placeholder = "" }, function(self, ui)
-  handle_reponse(ui, self, handle_change(self, "value", ui:text_edit_singleline(get_prop_val(self.props.value), get_prop_val(self.props.placeholder))))
-end)
-ui.InputMulti = register_element("textbox", { value = "" }, function(self, ui)
-  handle_reponse(ui, self, handle_change(self, "value", ui:text_edit_multiline(get_prop_val(self.props.value), get_prop_val(self.props.placeholder))))
+ui.Input = register_element("input", {
+  value = "",
+  placeholder = "",
+  multiline = false,
+  interactive = true,
+  frame = true,
+  code_editor = false,
+  password = false,
+  clip_text = true,
+  cursor_at_end = true,
+  
+}, function(self, ui)
+  local m = "singleline"
+  if self.props.multiline then m = "multiline" end
+  handle_reponse(ui, self, handle_change(self, "value", ui:text_edit(m, get_prop_val(self.props.value), self._dunders.focus, self.props)))
 end)
 
 ui.Align = register_element("align", { align = "start", layout = "left_to_right" }, function(self, ui)
