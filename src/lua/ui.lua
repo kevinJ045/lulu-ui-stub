@@ -223,8 +223,34 @@ local function prepare_props(props)
   return proxy
 end
 
+local function is_array(t)
+    if type(t) ~= "table" then
+        return false
+    end
+
+    local i = 0
+    for k in pairs(t) do
+        if type(k) ~= "number" or k % 1 ~= 0 or k < 1 then
+            return false -- non-integer or invalid key
+        end
+        if k > i then
+            i = k
+        end
+    end
+    -- Check for gaps
+    for j = 1, i do
+        if t[j] == nil then
+            return false
+        end
+    end
+    return true
+end
+
 class! @into_collectible("collect") Node(@default_to("") #name, @default_to(Vec()) #children, @default_to({}) #props), {
   init(){
+    if is_array(self.props) then
+      self.props = { children = self.props }
+    end
     if self.props.children then
       self.children = Vec(self.props.children)
       self.props.children = nil

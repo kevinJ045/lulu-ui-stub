@@ -79,22 +79,20 @@
           },
 
           HBox {
-            children = {
-              Input {
-                text = self.currentCommand,
-                id = "mytextedit",
-                frame = false,
-                multiline = true,
-                placeholder = "hello",
-                width = "100%",
-                on_changed = function(s, e)
-                  if e.keypressed('Enter') then
-                    BLOCKS:push(e.value)
-                    self.currentCommand:set("")
-                    s:focus()
-                  end
+            Input {
+              text = self.currentCommand,
+              id = "mytextedit",
+              frame = false,
+              multiline = true,
+              placeholder = "hello",
+              width = "100%",
+              on_changed = function(s, e)
+                if e.keypressed('Enter') then
+                  BLOCKS:push(e.value)
+                  self.currentCommand:set("")
+                  s:focus()
                 end
-              }
+              end
             }
           }
         }
