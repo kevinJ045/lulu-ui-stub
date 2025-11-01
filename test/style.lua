@@ -11,7 +11,7 @@
   }) @ComponentValues({
     accents = { mauve = c"#cba6f7", red = c"#f38ba8", sky = c"#89dceb", rosewater = c"#f5e0dc" },
     selectables = { mauve = "Mauve", red = "Red", sky = "Sky", rosewater = "Rosewater" }
-  }) @UIOverride('rebuild') @Component AppRoot =>
+  }) @UIOverride('rebuild') @Component() AppRoot =>
     return Style {
       style = self.colors:map((col) => return {
         spacing = {

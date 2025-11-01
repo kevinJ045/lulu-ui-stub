@@ -368,17 +368,22 @@ class! Widget:Node, {
   get(prop){
     return self.props[prop]
   }
+  rebuild(){
+    self.__built = nil
+  }
 }
 
 local default_elements = {}
 
-function widget_defaults(defaults)
+function WidgetDefaults(defaults)
   return function(_class)
 
     function _class:init(o)
       for k, v in pairs(defaults) do
-        if self.props[k] == nil then
-          self.props[k] = v
+        if type(k) ~= "number" then
+          if self.props[k] == nil then
+            self.props[k] = v
+          end
         end
       end
     end
@@ -395,7 +400,7 @@ local function handle_style(self, ui)
 end
 
 local function register_element(name, options_default, render, init)
-  local class! @widget_defaults(options_default) _c:Widget, (options) {
+  local class! @WidgetDefaults(options_default) _c:Widget, (options) {
     if options.props and options.props.child then
       options.props.children = { options.props.child }
       options.props.child = nil
@@ -747,21 +752,27 @@ end, function(VList)
 end)
 
 function build_component(instance)
-  return instance:build(instance.props)
+  return instance:build(instance.props or {})
 end
 
 function lml_create(name, props, ...)
   if default_elements[name] then
-    return default_elements[name](props, {...})
+    props.children = {...}
+    return default_elements[name](props)
   elseif name and type(name) == "table" and name.__call_init then
     return name({
       name = "_",
       props = props,
+      children = {...}
     })
   elseif name and type(name) == "function" then
-    return name(props, ...)
+    return name(props, {...})
   end
 end
+
+class! SilentWidget:Widget, {
+  rebuild(){}
+}
 
 function StatedComponent(states)
   return function(_class)
@@ -774,12 +785,7 @@ function StatedComponent(states)
         end)
         table.insert(self.states, k)
       end
-
     end
-
-    if not _class.rebuild then function _class:rebuild()
-      self.__built = nil
-    end end
 
     return _class
   end
@@ -801,37 +807,44 @@ function AutoRender(_class)
   return _class
 end
 
-function Component(_func)
-  local FuncComp = {}
-  if type(_func) == "function" then
-    class! FuncComp:Widget, {
-      init(arg){
-        self.props = arg
+function Component(p)
+  local w = Widget
+  if p then w = p end
+  return function(_func)
+    local FuncComp = {}
+    if type(_func) == "function" then
+      class! FuncComp:w, {
+        init(arg){
+          self.props = arg
+        }
       }
-    }
-    FuncComp.build = _func
-  else
-    FuncComp = _func
-  end
+      FuncComp.build = _func
+    else
+      FuncComp = _func
+    end
 
-  function FuncComp:init()
-    if self.prepare and not self.__prepared then
-      self:prepare(self.props)
-      self.__prepared = true
-    else 
-      self.__prepared = true
+    function FuncComp:init()
+      if not self.props then
+        self.props = {}
+      end
+      if self.prepare and not self.__prepared then
+        self:prepare(self.props)
+        self.__prepared = true
+      else 
+        self.__prepared = true
+      end
     end
-  end
-    
-  function FuncComp:_render(ui)
-    if self.build and not self.__built and self.__prepared then
-      self.__built = Vec({
-        build_component(self)
-      })
+      
+    function FuncComp:_render(ui)
+      if self.build and not self.__built and self.__prepared then
+        self.__built = Vec({
+          build_component(self)
+        })
+      end
+      render_from(self.__built, ui)
     end
-    render_from(self.__built, ui)
+    return FuncComp
   end
-  return FuncComp
 end
 
 local function render_ui(ui)

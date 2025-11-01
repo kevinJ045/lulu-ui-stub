@@ -5,7 +5,7 @@ local function Item(props)
   }
 end
 
-local class! @Component @StatedComponent({
+local class! @Component() @StatedComponent({
   loading = true,
   fetched_text = "",
   objects = Vec({"a", "b", "c"}),

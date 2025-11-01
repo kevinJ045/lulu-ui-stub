@@ -1,7 +1,7 @@
 
 () @namespace(ui) =>
 
-  local (self, props) @Component AddButton =>
+  local (self, props) @Component() AddButton =>
     return Button {
       text = f"Add",
       on_clicked = function()
@@ -10,7 +10,7 @@
     }
   end
 
-  local (self, props) @Component SubButton =>
+  local (self, props) @Component() SubButton =>
     return Button {
       text = f"Subtract",
       on_clicked = function()
@@ -21,7 +21,7 @@
 
   local (self) @AutoRender @StatedComponent({
     clicked = 0
-  }) @Component AppRoot =>
+  }) @Component() AppRoot =>
     return VBox {
       children = {
         {
@@ -38,10 +38,8 @@
           text = f"Clicked: {self.clicked:get()}"
         },
         HBox {
-          children = {
-            AddButton { clicked = self.clicked },
-            SubButton { clicked = self.clicked },
-          }
+          AddButton { clicked = self.clicked },
+          SubButton { clicked = self.clicked },
         }
       }
     }

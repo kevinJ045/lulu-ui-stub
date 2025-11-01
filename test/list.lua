@@ -8,7 +8,7 @@
       sleep(1)
       self.items:set(Vec({ "a", "b", "c", "d" }))
     end)
-  end) @Component AppRoot =>
+  end) @Component() AppRoot =>
     return Frame {
       children = {
         Spinner {

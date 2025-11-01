@@ -2,7 +2,7 @@
 () @namespace(ui) =>
 
 
-  local (self) @AutoRender @Component AppRoot =>
+  local (self) @AutoRender @Component() AppRoot =>
     return VBox {
       children = {
         Painter {
